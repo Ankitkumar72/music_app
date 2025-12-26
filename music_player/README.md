@@ -1,9 +1,3 @@
-This is a solid foundation for a music player. Your use of `ValueNotifier` and `RepaintBoundary` shows you're already thinking about performance and high-FPS UI updates, which is crucial for media apps.
-
-Here is a professional, comprehensive `README.md` file tailored to your "Pixy" project.
-
----
-
 # Pixy Music Player 🎵
 
 **Pixy** is a high-performance, lightweight local music player built with Flutter. It focuses on a smooth user experience by utilizing optimized state management for real-time seek bar updates and efficient asset rendering.
@@ -86,14 +80,3 @@ The app is designed with performance in mind:
 
 ## 📸 Screenshots
 
-| Home Screen | Playback Controls |
-| --- | --- |
-| ![Song List Placeholder] | ![Player View Placeholder] |
-
-## 🤝 Contributing
-
-Contributions are welcome! If you have suggestions for new features or performance improvements, feel free to open an issue or submit a pull request.
-
----
-
-Would you like me to add a **"Future Roadmap"** section to this README with ideas like "Playlist Support" or "Equalizer Settings"?
