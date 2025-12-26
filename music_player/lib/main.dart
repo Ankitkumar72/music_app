@@ -1,213 +1,330 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:on_audio_query/on_audio_query.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:permission_handler/permission_handler.dart';
 
-void main() {
-  runApp(const PixelPlay());
-}
+void main() => runApp(const MusicPlayerApp());
 
-class PixelPlay extends StatelessWidget {
-  const PixelPlay({super.key});
+class MusicPlayerApp extends StatelessWidget {
+  const MusicPlayerApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: MusicPlayer(),
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF121212),
+        primaryColor: const Color(0xFFBB86FC),
+        splashFactory: NoSplash.splashFactory,
+      ),
+      home: const MainScreen(),
     );
   }
 }
 
-class MusicPlayer extends StatefulWidget {
-  const MusicPlayer({super.key});
+class MainScreen extends StatefulWidget {
+  const MainScreen({super.key});
 
   @override
-  State<MusicPlayer> createState() => _MusicPlayerState();
+  State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MusicPlayerState extends State<MusicPlayer> {
-  final AudioPlayer player = AudioPlayer();
-  final OnAudioQuery audioQuery = OnAudioQuery();
+class _MainScreenState extends State<MainScreen> {
+  final OnAudioQuery _audioQuery = OnAudioQuery();
+  final AudioPlayer _player = AudioPlayer();
 
-  // ValueNotifiers for high-FPS rebuild isolation
-  final ValueNotifier<Duration> position = ValueNotifier(Duration.zero);
-  final ValueNotifier<Duration> duration = ValueNotifier(Duration.zero);
-  final ValueNotifier<Duration> buffered = ValueNotifier(Duration.zero);
+  List<SongModel> _songs = [];
+  SongModel? _currentSong;
+  int _currentIndex = -1;
 
-  bool isDragging = false;
-  double dragValue = 0;
+  Widget? _cachedArtwork;
+  Widget? _cachedSongList;
 
-  StreamSubscription? posSub;
-  StreamSubscription? durSub;
-  StreamSubscription? bufSub;
+  bool _hasPermission = false;
+
+  // 🔥 ValueNotifiers (high-FPS safe)
+  final ValueNotifier<Duration> _position = ValueNotifier(Duration.zero);
+  final ValueNotifier<Duration> _duration = ValueNotifier(Duration.zero);
+  final ValueNotifier<Duration> _buffered = ValueNotifier(Duration.zero);
+
+  bool _isDragging = false;
+  double _dragValue = 0.0;
 
   @override
   void initState() {
     super.initState();
-    _initPlayerStreams();
+    _requestPermissions();
+    _listenPlayer();
   }
 
-  void _initPlayerStreams() {
-    posSub = player.positionStream.listen((pos) {
-      if (!isDragging) {
-        position.value = pos;
-      }
+  void _listenPlayer() {
+    _player.durationStream.listen((d) {
+      if (d != null) _duration.value = d;
     });
 
-    durSub = player.durationStream.listen((dur) {
-      if (dur != null) {
-        duration.value = dur;
-      }
+    _player.positionStream.listen((p) {
+      if (!_isDragging) _position.value = p;
     });
 
-    bufSub = player.bufferedPositionStream.listen((buf) {
-      buffered.value = buf;
+    _player.bufferedPositionStream.listen((b) {
+      _buffered.value = b;
     });
+  }
+
+  Future<void> _requestPermissions() async {
+    PermissionStatus status = await Permission.audio.request();
+    if (!status.isGranted) {
+      status = await Permission.storage.request();
+    }
+    setState(() => _hasPermission = status.isGranted);
+  }
+
+  Future<void> _playSong(int index) async {
+    _currentIndex = index;
+    _currentSong = _songs[index];
+
+    _cachedArtwork = QueryArtworkWidget(
+      key: ValueKey(_currentSong!.id),
+      id: _currentSong!.id,
+      type: ArtworkType.AUDIO,
+      artworkHeight: 220,
+      artworkWidth: 220,
+      artworkFit: BoxFit.cover,
+      nullArtworkWidget: const Icon(Icons.music_note, size: 100),
+    );
+
+    await _player.setFilePath(_currentSong!.data);
+    _player.play();
+
+    setState(() {});
+  }
+
+  String _format(Duration d) {
+    final m = d.inMinutes;
+    final s = d.inSeconds % 60;
+    return "$m:${s.toString().padLeft(2, '0')}";
   }
 
   @override
   void dispose() {
-    posSub?.cancel();
-    durSub?.cancel();
-    bufSub?.cancel();
-    player.dispose();
+    _player.dispose();
     super.dispose();
-  }
-
-  String formatTime(Duration d) {
-    final minutes = d.inMinutes;
-    final seconds = d.inSeconds % 60;
-    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 0, 0, 0),
-      appBar: AppBar(backgroundColor: Colors.black, title: const Text('Pixy')),
-      body: Column(
-        children: [
-          const SizedBox(height: 30),
+      appBar: AppBar(
+        title: const Text("Pixy"),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      body: !_hasPermission
+          ? const Center(child: Text("Permission required"))
+          : Column(
+              children: [
+                RepaintBoundary(child: _buildNowPlaying()),
+                Expanded(child: _buildSongList()),
+              ],
+            ),
+    );
+  }
 
-          /// ===================== SEEK BAR =====================
+  // ================= NOW PLAYING =================
+
+  Widget _buildNowPlaying() {
+    if (_currentSong == null) {
+      return const Padding(
+        padding: EdgeInsets.all(20),
+        child: Text("Select a song to play"),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          RepaintBoundary(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: _cachedArtwork,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _currentSong!.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          Text(
+            _currentSong!.artist ?? "Unknown",
+            style: const TextStyle(color: Colors.grey),
+          ),
+
+          // ===== SEEK + BUFFERED (VALUE NOTIFIER BASED) =====
           ValueListenableBuilder<Duration>(
-            valueListenable: duration,
+            valueListenable: _duration,
             builder: (context, dur, child) {
-              final max = dur.inMilliseconds.toDouble();
+              final double maxMs = dur.inMilliseconds > 0
+                  ? dur.inMilliseconds.toDouble()
+                  : 1.0;
 
               return ValueListenableBuilder<Duration>(
-                valueListenable: position,
+                valueListenable: _position,
                 builder: (context, pos, child) {
-                  final currentValue = isDragging
-                      ? dragValue
-                      : pos.inMilliseconds.clamp(0, max.toInt()).toDouble();
+                  final double sliderValue = _isDragging
+                      ? _dragValue
+                      : pos.inMilliseconds.clamp(0, maxMs.toInt()).toDouble();
 
-                  return Column(
-                    children: [
-                      ValueListenableBuilder<Duration>(
-                        valueListenable: buffered,
-                        builder: (context, buf, child) {
-                          final bufferedValue = buf.inMilliseconds
-                              .clamp(0, max.toInt())
-                              .toDouble();
+                  return ValueListenableBuilder<Duration>(
+                    valueListenable: _buffered,
+                    builder: (context, buf, child) {
+                      final double bufferedValue = buf.inMilliseconds
+                          .clamp(0, maxMs.toInt())
+                          .toDouble();
 
-                          return Stack(
-                            alignment: Alignment.centerLeft,
+                      return Column(
+                        children: [
+                          Stack(
                             children: [
-                              /// Buffered slider (background)
-                              SliderTheme(
-                                data: SliderTheme.of(context).copyWith(
-                                  thumbShape: const RoundSliderThumbShape(
-                                    enabledThumbRadius: 0,
-                                  ),
-                                  overlayShape: SliderComponentShape.noOverlay,
-                                  activeTrackColor: Colors.grey.shade700,
-                                  inactiveTrackColor: Colors.grey.shade900,
-                                ),
-                                child: Slider(
-                                  value: bufferedValue,
-                                  min: 0,
-                                  max: max == 0 ? 1 : max,
-                                  onChanged: null,
-                                ),
+                              Slider(
+                                value: bufferedValue,
+                                max: maxMs,
+                                onChanged: null,
                               ),
-
-                              /// Main draggable slider
-                              SliderTheme(
-                                data: SliderTheme.of(context).copyWith(
-                                  activeTrackColor: Colors.greenAccent,
-                                  inactiveTrackColor: Colors.transparent,
-                                  overlayShape: SliderComponentShape.noOverlay,
-                                ),
-                                child: Slider(
-                                  value: currentValue,
-                                  min: 0,
-                                  max: max == 0 ? 1 : max,
-
-                                  onChangeStart: (value) {
-                                    isDragging = true;
-                                    dragValue = value;
-                                  },
-
-                                  onChanged: (value) {
-                                    dragValue = value;
-                                  },
-
-                                  onChangeEnd: (value) async {
-                                    isDragging = false;
-                                    await player.seek(
-                                      Duration(milliseconds: value.toInt()),
-                                    );
-                                  },
-                                ),
+                              Slider(
+                                value: sliderValue,
+                                max: maxMs,
+                                onChangeStart: (v) {
+                                  _isDragging = true;
+                                  _dragValue = v;
+                                },
+                                onChanged: (v) {
+                                  _dragValue = v;
+                                },
+                                onChangeEnd: (v) async {
+                                  _isDragging = false;
+                                  await _player.seek(
+                                    Duration(milliseconds: v.toInt()),
+                                  );
+                                },
                               ),
                             ],
-                          );
-                        },
-                      ),
-
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              formatTime(pos),
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                            Text(
-                              formatTime(dur),
-                              style: const TextStyle(color: Colors.white),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [Text(_format(pos)), Text(_format(dur))],
+                          ),
+                        ],
+                      );
+                    },
                   );
                 },
               );
             },
           ),
 
-          const SizedBox(height: 40),
-
-          /// ===================== CONTROLS =====================
-          IconButton(
-            iconSize: 64,
-            color: Colors.white,
-            icon: const Icon(Icons.play_arrow),
-            onPressed: () async {
-              final songs = await audioQuery.querySongs();
-              if (songs.isNotEmpty && songs.first.uri != null) {
-                await player.setAudioSource(
-                  AudioSource.uri(Uri.parse(songs.first.uri!)),
-                );
-                player.play();
-              }
-            },
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                iconSize: 42,
+                icon: const Icon(Icons.skip_previous),
+                onPressed: _currentIndex > 0
+                    ? () => _playSong(_currentIndex - 1)
+                    : null,
+              ),
+              IconButton(
+                iconSize: 64,
+                icon: Icon(
+                  _player.playing ? Icons.pause_circle : Icons.play_circle,
+                ),
+                onPressed: () =>
+                    _player.playing ? _player.pause() : _player.play(),
+              ),
+              IconButton(
+                iconSize: 42,
+                icon: const Icon(Icons.skip_next),
+                onPressed: _currentIndex < _songs.length - 1
+                    ? () => _playSong(_currentIndex + 1)
+                    : null,
+              ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+
+  // ================= SONG LIST =================
+
+  Widget _buildSongList() {
+    if (_cachedSongList != null) return _cachedSongList!;
+
+    return FutureBuilder<List<SongModel>>(
+      future: _audioQuery.querySongs(
+        ignoreCase: true,
+        orderType: OrderType.ASC_OR_SMALLER,
+        uriType: UriType.EXTERNAL,
+      ),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        _songs = snapshot.data!;
+
+        _cachedSongList = ListView.builder(
+          padding: const EdgeInsets.only(bottom: 90),
+          itemCount: _songs.length,
+          itemBuilder: (context, index) {
+            return _SongTile(
+              song: _songs[index],
+              isPlaying: index == _currentIndex,
+              onTap: () => _playSong(index),
+            );
+          },
+        );
+
+        return _cachedSongList!;
+      },
+    );
+  }
+}
+
+// ================= SONG TILE =================
+
+class _SongTile extends StatelessWidget {
+  final SongModel song;
+  final bool isPlaying;
+  final VoidCallback onTap;
+
+  const _SongTile({
+    required this.song,
+    required this.isPlaying,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Theme(
+      data: Theme.of(context).copyWith(
+        splashFactory: NoSplash.splashFactory,
+        highlightColor: Colors.transparent,
+      ),
+      child: ListTile(
+        leading: QueryArtworkWidget(
+          id: song.id,
+          type: ArtworkType.AUDIO,
+          nullArtworkWidget: const Icon(Icons.music_note),
+        ),
+        title: Text(song.title, maxLines: 1),
+        subtitle: Text(song.artist ?? "Unknown"),
+        trailing: isPlaying
+            ? const Icon(Icons.equalizer, color: Color(0xFFBB86FC))
+            : null,
+        onTap: onTap,
       ),
     );
   }
