@@ -42,7 +42,6 @@ class _MainScreenState extends State<MainScreen> {
 
   bool _hasPermission = false;
 
-  // 🔥 ValueNotifiers (high-FPS safe)
   final ValueNotifier<Duration> _position = ValueNotifier(Duration.zero);
   final ValueNotifier<Duration> _duration = ValueNotifier(Duration.zero);
   final ValueNotifier<Duration> _buffered = ValueNotifier(Duration.zero);
