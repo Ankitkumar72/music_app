@@ -1,7 +1,19 @@
 import 'package:flutter/material.dart';
-import 'screens/navigation_shell.dart';
+import 'package:provider/provider.dart';
 
-void main() => runApp(const MusicPlayerApp());
+import 'screens/navigation_shell.dart';
+import 'logic/music_provider.dart';
+
+void main() {
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => MusicProvider()..fetchSongs()),
+      ],
+      child: const MusicPlayerApp(),
+    ),
+  );
+}
 
 class MusicPlayerApp extends StatelessWidget {
   const MusicPlayerApp({super.key});
@@ -12,13 +24,11 @@ class MusicPlayerApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Pixy',
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(
-          0xFF0A0A12,
-        ), // Deep navy from your UI
-        primaryColor: const Color(0xFF6332F6), // Purple accent
+        scaffoldBackgroundColor: const Color(0xFF0A0A12),
+        primaryColor: const Color(0xFF6332F6),
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFF6332F6),
-          secondary: Color(0xFFFFC107), // Yellow accent for play buttons
+          secondary: Color(0xFFFFC107),
         ),
       ),
       home: const NavigationShell(),
