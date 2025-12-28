@@ -7,7 +7,6 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-
 val localProperties = Properties().apply {
     val localPropertiesFile = rootProject.file("local.properties")
     if (localPropertiesFile.exists()) {
@@ -34,15 +33,38 @@ android {
 
     defaultConfig {
         applicationId = "com.example.music_player"
-        minSdk = flutter.minSdkVersion
+        minSdk = Math.max(flutter.minSdkVersion ?: 21, 21)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutterVersionCode
         versionName = flutterVersionName
+        multiDexEnabled = true
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
-        release {
+        getByName("debug") {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-DEBUG"
+        }
+        
+        getByName("release") {
             signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+    }
+
+    packagingOptions {
+        resources {
+            excludes += setOf(
+                "META-INF/NOTICE",
+                "META-INF/LICENSE",
+                "META-INF/*.kotlin_module"
+            )
         }
     }
 }
@@ -51,4 +73,6 @@ flutter {
     source = "../.."
 }
 
-dependencies {}
+dependencies {
+    implementation("androidx.multidex:multidex:2.0.1")
+}
