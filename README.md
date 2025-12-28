@@ -15,7 +15,7 @@
 
 * **Framework:** [Flutter](https://flutter.dev/)
 * **Audio Engine:** [just_audio](https://pub.dev/packages/just_audio)
-* **Storage Query:** [on_audio_query](https://www.google.com/search?q=https://pub.dev/packages/on_audio_query)
+* **Storage Query:** [on_audio_query](https://pub.dev/packages/on_audio_query/versions)
 * **Permissions:** [permission_handler](https://pub.dev/packages/permission_handler)
 
 ## 🚀 Getting Started
