@@ -1,0 +1,101 @@
+import 'package:flutter/material.dart';
+// import 'package:on_audio_query/on_audio_query.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'home_screen.dart';
+import 'library_screen.dart';
+import 'search_screen.dart';
+import '../widgets/mini_player.dart';
+
+class NavigationShell extends StatefulWidget {
+  const NavigationShell({super.key});
+
+  @override
+  State<NavigationShell> createState() => _NavigationShellState();
+}
+
+class _NavigationShellState extends State<NavigationShell> {
+  int _selectedIndex = 0;
+  bool _hasPermission = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPermissions();
+  }
+
+  // Moved your permission logic here so it runs once when the app starts
+  Future<void> _checkPermissions() async {
+    PermissionStatus status = await Permission.audio.request();
+    if (!status.isGranted) {
+      status = await Permission.storage.request();
+    }
+    setState(() => _hasPermission = status.isGranted);
+  }
+
+  // The list of screens matching your shared images
+  final List<Widget> _screens = [
+    const HomeScreen(), // image_d21b80.jpg
+    const LibraryScreen(), // image_d21bf9.jpg
+    const SearchScreen(), // image_d21e9f.jpg
+    const Center(child: Text("Playlists")), // image_d21ec4.jpg
+    const Center(child: Text("Settings")),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_hasPermission) {
+      return const Scaffold(
+        body: Center(
+          child: Text("Please grant storage permissions to continue."),
+        ),
+      );
+    }
+
+    return Scaffold(
+      body: Stack(
+        children: [
+          // Using IndexedStack prevents the screens from "reloading"
+          // every time you switch tabs.
+          IndexedStack(index: _selectedIndex, children: _screens),
+
+          // The Floating Mini Player from your Starboy UI design
+          const Positioned(
+            left: 10,
+            right: 10,
+            bottom: 10,
+            child: MiniPlayer(),
+          ),
+        ],
+      ),
+      bottomNavigationBar: Theme(
+        data: Theme.of(context).copyWith(canvasColor: const Color(0xFF0A0A12)),
+        child: BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          onTap: (index) => setState(() => _selectedIndex = index),
+          type: BottomNavigationBarType.fixed,
+          selectedItemColor: const Color(0xFF6332F6),
+          unselectedItemColor: Colors.grey,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home_filled),
+              label: "Home",
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.library_music),
+              label: "Library",
+            ),
+            BottomNavigationBarItem(icon: Icon(Icons.search), label: "Search"),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.playlist_play),
+              label: "Playlists",
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.settings),
+              label: "Settings",
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
