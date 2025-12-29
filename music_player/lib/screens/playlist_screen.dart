@@ -268,7 +268,6 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     );
   }
 
-  // (Helper Dialogs: Profile, Search, Options, Create, Rename, Delete)
   void _showProfileMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
