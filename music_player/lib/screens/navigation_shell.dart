@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-// import 'package:on_audio_query/on_audio_query.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'home_screen.dart';
 import 'library_screen.dart';
 import 'search_screen.dart';
+import 'playlist_screen.dart'; // ← ADD THIS IMPORT
 import '../widgets/mini_player.dart';
 
 class NavigationShell extends StatefulWidget {
@@ -23,7 +23,6 @@ class _NavigationShellState extends State<NavigationShell> {
     _checkPermissions();
   }
 
-  // Moved your permission logic here so it runs once when the app starts
   Future<void> _checkPermissions() async {
     PermissionStatus status = await Permission.audio.request();
     if (!status.isGranted) {
@@ -32,12 +31,12 @@ class _NavigationShellState extends State<NavigationShell> {
     setState(() => _hasPermission = status.isGranted);
   }
 
-  // The list of screens matching your shared images
+  // ✅ FIXED: Replace placeholder with actual PlaylistScreen
   final List<Widget> _screens = [
-    const HomeScreen(), // image_d21b80.jpg
-    const LibraryScreen(), // image_d21bf9.jpg
-    const SearchScreen(), // image_d21e9f.jpg
-    const Center(child: Text("Playlists")), // image_d21ec4.jpg
+    const HomeScreen(),
+    const LibraryScreen(),
+    const SearchScreen(),
+    const PlaylistScreen(), // ← CHANGED THIS LINE
     const Center(child: Text("Settings")),
   ];
 
@@ -54,11 +53,9 @@ class _NavigationShellState extends State<NavigationShell> {
     return Scaffold(
       body: Stack(
         children: [
-          // Using IndexedStack prevents the screens from "reloading"
-          // every time you switch tabs.
           IndexedStack(index: _selectedIndex, children: _screens),
 
-          // The Floating Mini Player from your Starboy UI design
+          // Mini Player
           const Positioned(
             left: 10,
             right: 10,
@@ -75,6 +72,10 @@ class _NavigationShellState extends State<NavigationShell> {
           type: BottomNavigationBarType.fixed,
           selectedItemColor: const Color(0xFF6332F6),
           unselectedItemColor: Colors.grey,
+          showSelectedLabels: true,
+          showUnselectedLabels: true,
+          selectedFontSize: 12,
+          unselectedFontSize: 11,
           items: const [
             BottomNavigationBarItem(
               icon: Icon(Icons.home_filled),

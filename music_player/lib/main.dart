@@ -1,14 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
+import 'package:hive_flutter/hive_flutter.dart';
 import 'screens/navigation_shell.dart';
 import 'logic/music_provider.dart';
+import 'logic/models/song_data.dart';
 
-void main() {
+void main() async {
+  // 1. Initialize Flutter bindings
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // 2. Initialize Hive and Register Adapters
+  await Hive.initFlutter();
+  Hive.registerAdapter(SongDataAdapter());
+  Hive.registerAdapter(PlaylistDataAdapter());
+
+  // 3. Run the App with MultiProvider
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => MusicProvider()..fetchSongs()),
+        ChangeNotifierProvider(
+          // fetchSongs() is called immediately upon creation
+          create: (_) => MusicProvider()..fetchSongs(),
+        ),
       ],
       child: const MusicPlayerApp(),
     ),

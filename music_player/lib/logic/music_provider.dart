@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:hive/hive.dart';
+
+import 'models/song_data.dart';
 
 class MusicProvider extends ChangeNotifier {
   final OnAudioQuery _audioQuery = OnAudioQuery();
@@ -8,7 +11,6 @@ class MusicProvider extends ChangeNotifier {
 
   List<SongModel> _songs = [];
   final List<SongModel> _likedSongs = [];
-
   final Map<String, List<SongModel>> _playlists = {"Liked": []};
 
   int _currentIndex = -1;
@@ -16,6 +18,9 @@ class MusicProvider extends ChangeNotifier {
   bool _isPlaying = false;
   bool _isShuffleModeEnabled = false;
   LoopMode _loopMode = LoopMode.off;
+
+  late Box<PlaylistData> _playlistBox;
+  bool _isHiveReady = false; // Guard flag for Hive
 
   // ================= GETTERS =================
   List<SongModel> get songs => _songs;
@@ -36,6 +41,8 @@ class MusicProvider extends ChangeNotifier {
 
   // ================= CONSTRUCTOR =================
   MusicProvider() {
+    _initHive();
+
     _audioPlayer.playingStream.listen((playing) {
       _isPlaying = playing;
       notifyListeners();
@@ -49,7 +56,48 @@ class MusicProvider extends ChangeNotifier {
     });
   }
 
-  // ================= FETCH SONGS (UPDATED FOR ANDROID 13+) =================
+  // ================= HIVE =================
+  Future<void> _initHive() async {
+    try {
+      _playlistBox = await Hive.openBox<PlaylistData>('playlists');
+      _isHiveReady = true;
+      debugPrint("Hive initialized successfully.");
+      // If songs were already fetched before Hive opened, sync now
+      if (_songs.isNotEmpty) {
+        _syncWithHive();
+      }
+    } catch (e) {
+      debugPrint("Hive init error: $e");
+    }
+  }
+
+  void _syncWithHive() {
+    if (!_isHiveReady) return;
+
+    debugPrint("Syncing Hive data with ${_songs.length} songs...");
+    for (final data in _playlistBox.values) {
+      final matchedSongs = _songs
+          .where((s) => data.songIds.contains(s.id))
+          .toList();
+
+      _playlists[data.name] = matchedSongs;
+
+      if (data.name == "Liked") {
+        _likedSongs
+          ..clear()
+          ..addAll(matchedSongs);
+      }
+    }
+    notifyListeners();
+  }
+
+  void _savePlaylist(String name) {
+    if (!_isHiveReady) return;
+    final songIds = _playlists[name]?.map((song) => song.id).toList() ?? [];
+    _playlistBox.put(name, PlaylistData(name: name, songIds: songIds));
+  }
+
+  // ================= FETCH SONGS (UPDATED PERMISSION LOGIC) =================
   Future<void> fetchSongs() async {
     if (_songs.isNotEmpty) return;
 
@@ -57,11 +105,8 @@ class MusicProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Step 3 Fix: Explicitly check and request permissions for Release builds.
-      // on_audio_query's permissionsStatus() checks for READ_MEDIA_AUDIO on Android 13+
-      // and READ_EXTERNAL_STORAGE on older versions automatically.
+      // Step 3 Fix: Explicitly check for Android 13+ (READ_MEDIA_AUDIO)
       bool hasPermission = await _audioQuery.permissionsStatus();
-
       if (!hasPermission) {
         hasPermission = await _audioQuery.permissionsRequest();
       }
@@ -73,8 +118,13 @@ class MusicProvider extends ChangeNotifier {
           sortType: SongSortType.TITLE,
           uriType: UriType.EXTERNAL,
         );
+
+        // Sync Hive ONLY if songs were successfully loaded
+        if (_isHiveReady) {
+          _syncWithHive();
+        }
       } else {
-        debugPrint("Storage/Media permissions were denied by the user.");
+        debugPrint("Permissions denied in Release mode.");
       }
     } catch (e) {
       debugPrint("Error fetching songs: $e");
@@ -95,6 +145,7 @@ class MusicProvider extends ChangeNotifier {
       _likedSongs.add(song);
       _playlists["Liked"]?.add(song);
     }
+    _savePlaylist("Liked");
     notifyListeners();
   }
 
@@ -102,73 +153,77 @@ class MusicProvider extends ChangeNotifier {
     if (!isLiked(song)) {
       _likedSongs.add(song);
       _playlists["Liked"]?.add(song);
+      _savePlaylist("Liked");
       notifyListeners();
     }
   }
 
   // ================= PLAYLIST MANAGEMENT =================
   void createPlaylist(String name) {
-    final trimmedName = name.trim();
-    if (trimmedName.isNotEmpty && !_playlists.containsKey(trimmedName)) {
-      _playlists[trimmedName] = [];
+    final trimmed = name.trim();
+    if (trimmed.isNotEmpty && !_playlists.containsKey(trimmed)) {
+      _playlists[trimmed] = [];
+      _savePlaylist(trimmed);
       notifyListeners();
     }
   }
 
   void renamePlaylist(String oldName, String newName) {
     final trimmedNew = newName.trim();
+    if (oldName == "Liked") return;
+
     if (_playlists.containsKey(oldName) &&
         !_playlists.containsKey(trimmedNew) &&
-        oldName != "Liked" &&
         trimmedNew.isNotEmpty) {
       _playlists[trimmedNew] = _playlists.remove(oldName)!;
+      _playlistBox.delete(oldName);
+      _savePlaylist(trimmedNew);
       notifyListeners();
     }
   }
 
   void deletePlaylist(String name) {
-    if (name != "Liked") {
-      _playlists.remove(name);
-      notifyListeners();
-    }
+    if (name == "Liked") return;
+    _playlists.remove(name);
+    _playlistBox.delete(name);
+    notifyListeners();
   }
 
   void addToPlaylist(String name, SongModel song) {
-    if (_playlists.containsKey(name)) {
-      if (!_playlists[name]!.any((s) => s.id == song.id)) {
-        _playlists[name]!.add(song);
-
-        if (name == "Liked" && !isLiked(song)) {
-          _likedSongs.add(song);
-        }
-
-        notifyListeners();
+    if (_playlists.containsKey(name) &&
+        !_playlists[name]!.any((s) => s.id == song.id)) {
+      _playlists[name]!.add(song);
+      if (name == "Liked" && !isLiked(song)) {
+        _likedSongs.add(song);
       }
+      _savePlaylist(name);
+      notifyListeners();
     }
   }
 
   void removeFromPlaylist(String name, int songId) {
     if (_playlists.containsKey(name)) {
       _playlists[name]!.removeWhere((s) => s.id == songId);
-
       if (name == "Liked") {
         _likedSongs.removeWhere((s) => s.id == songId);
       }
-
+      _savePlaylist(name);
       notifyListeners();
     }
   }
 
-  // ================= PLAYBACK =================
+  // ================= PLAYBACK (URI FIX) =================
   Future<void> playSong(int index) async {
     if (index < 0 || index >= _songs.length) return;
 
     try {
       if (_audioPlayer.audioSource == null) {
         final playlist = ConcatenatingAudioSource(
-          children: _songs.map((song) {
-            return AudioSource.uri(Uri.parse(song.data));
-          }).toList(),
+          children: _songs
+              .map(
+                (song) => AudioSource.uri(Uri.file(song.data)),
+              ) // Fixed for local files
+              .toList(),
         );
 
         await _audioPlayer.setAudioSource(
@@ -176,10 +231,8 @@ class MusicProvider extends ChangeNotifier {
           initialIndex: index,
           initialPosition: Duration.zero,
         );
-      } else {
-        if (_currentIndex != index) {
-          await _audioPlayer.seek(Duration.zero, index: index);
-        }
+      } else if (_currentIndex != index) {
+        await _audioPlayer.seek(Duration.zero, index: index);
       }
 
       _audioPlayer.play();
@@ -189,21 +242,18 @@ class MusicProvider extends ChangeNotifier {
   }
 
   void togglePlay() {
-    if (_audioPlayer.playing) {
-      _audioPlayer.pause();
-    } else {
-      _audioPlayer.play();
-    }
+    _audioPlayer.playing ? _audioPlayer.pause() : _audioPlayer.play();
     notifyListeners();
   }
 
   // ================= NAVIGATION =================
   void playNext() => _audioPlayer.hasNext ? _audioPlayer.seekToNext() : null;
+
   void playPrevious() =>
       _audioPlayer.hasPrevious ? _audioPlayer.seekToPrevious() : null;
 
   // ================= SHUFFLE / REPEAT =================
-  void toggleShuffle() async {
+  Future<void> toggleShuffle() async {
     _isShuffleModeEnabled = !_isShuffleModeEnabled;
     if (_isShuffleModeEnabled) await _audioPlayer.shuffle();
     await _audioPlayer.setShuffleModeEnabled(_isShuffleModeEnabled);
@@ -211,13 +261,12 @@ class MusicProvider extends ChangeNotifier {
   }
 
   void toggleRepeat() {
-    if (_loopMode == LoopMode.off) {
-      _loopMode = LoopMode.all;
-    } else if (_loopMode == LoopMode.all) {
-      _loopMode = LoopMode.one;
-    } else {
-      _loopMode = LoopMode.off;
-    }
+    _loopMode = _loopMode == LoopMode.off
+        ? LoopMode.all
+        : _loopMode == LoopMode.all
+        ? LoopMode.one
+        : LoopMode.off;
+
     _audioPlayer.setLoopMode(_loopMode);
     notifyListeners();
   }
