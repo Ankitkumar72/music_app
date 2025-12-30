@@ -1,6 +1,7 @@
+
 ---
 
-# Pixy Player 🎵
+# Pixy Music Player 🎵
 
 **Pixy** is a modern, high-performance Flutter music player designed for local audio playback. It features a dynamic UI that syncs with your listening habits, smart playlist management, and a robust state management system powered by Provider.
 
@@ -104,3 +105,4 @@ Feel free to fork this project and submit pull requests. For major changes, plea
 This project is licensed under the MIT License.
 
 ---
+
