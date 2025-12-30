@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:hive/hive.dart';
-import 'models/song_data.dart'; // Ensure this path is correct for your project
+import 'models/song_data.dart';
 
 class MusicProvider extends ChangeNotifier {
   final OnAudioQuery _audioQuery = OnAudioQuery();
