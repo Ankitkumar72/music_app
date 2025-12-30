@@ -1,6 +1,8 @@
-// ignore_for_file: curly_braces_in_flow_control_structures
+// ignore_for_file: curly_braces_in_flow_control_structures, unused_field, prefer_final_fields
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:on_audio_query/on_audio_query.dart';
+
 import '../logic/music_provider.dart';
 import '../widgets/filter_tab.dart';
 import '../widgets/playlist_card.dart';
@@ -16,11 +18,15 @@ class PlaylistScreen extends StatefulWidget {
 class _PlaylistScreenState extends State<PlaylistScreen> {
   String _selectedFilter = "All Playlists";
 
+  String _searchQuery = "";
+  final TextEditingController _searchController = TextEditingController();
+
   @override
   Widget build(BuildContext context) {
     final musicProvider = context.watch<MusicProvider>();
     final allPlaylists = musicProvider.allPlaylists;
-    final filteredPlaylists = _filterPlaylists(allPlaylists);
+
+    final filteredPlaylists = _filterAndSearchPlaylists(allPlaylists);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A12),
@@ -33,7 +39,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
               const SizedBox(height: 20),
               _buildHeader(context, allPlaylists),
               const SizedBox(height: 30),
-              _buildTitleSection(context),
+              _buildTitleSection(context, musicProvider),
               const SizedBox(height: 25),
               _buildFilterTabs(),
               const SizedBox(height: 25),
@@ -42,15 +48,54 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
           ),
         ),
       ),
-      floatingActionButton: _buildFAB(context, musicProvider),
     );
   }
 
-  // --- UI SECTIONS ---
+  // ───────────────────────────────── SEARCH LOGIC ─────────────────────────────────
+
+  Map<String, List<SongModel>> _filterAndSearchPlaylists(
+    Map<String, List<SongModel>> playlists,
+  ) {
+    Map<String, List<SongModel>> categoryFiltered;
+
+    if (_selectedFilter == "Favorites") {
+      categoryFiltered = {"Liked": playlists["Liked"] ?? []};
+    } else if (_selectedFilter == "My Mixes") {
+      categoryFiltered = Map.fromEntries(
+        playlists.entries.where((e) => e.key != "Liked"),
+      );
+    } else {
+      categoryFiltered = playlists;
+    }
+
+    if (_searchQuery.isEmpty) return categoryFiltered;
+
+    final query = _searchQuery.toLowerCase();
+    final Map<String, List<SongModel>> results = {};
+
+    for (final entry in categoryFiltered.entries) {
+      final playlistName = entry.key.toLowerCase();
+      final songs = entry.value;
+
+      final nameMatch = playlistName.contains(query);
+      final songMatch = songs.any(
+        (song) =>
+            song.title.toLowerCase().contains(query) ||
+            (song.artist?.toLowerCase().contains(query) ?? false),
+      );
+
+      if (nameMatch || songMatch) {
+        results[entry.key] = entry.value;
+      }
+    }
+    return results;
+  }
+
+  // ───────────────────────────────── UI SECTIONS ─────────────────────────────────
 
   Widget _buildHeader(
     BuildContext context,
-    Map<String, List<dynamic>> allPlaylists,
+    Map<String, List<SongModel>> allPlaylists,
   ) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -63,27 +108,15 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
             child: Icon(Icons.person, color: Colors.white),
           ),
         ),
-        Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.search, color: Colors.white70, size: 28),
-              onPressed: () => _showSearchDialog(context, allPlaylists),
-            ),
-            IconButton(
-              icon: const Icon(
-                Icons.more_vert,
-                color: Colors.white70,
-                size: 28,
-              ),
-              onPressed: () => _showMoreOptions(context),
-            ),
-          ],
+        IconButton(
+          icon: const Icon(Icons.more_vert, color: Colors.white70, size: 28),
+          onPressed: () => _showMoreOptions(context),
         ),
       ],
     );
   }
 
-  Widget _buildTitleSection(BuildContext context) {
+  Widget _buildTitleSection(BuildContext context, MusicProvider provider) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -95,26 +128,35 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
             color: Colors.white,
           ),
         ),
-        _buildIconButton(Icons.grid_view_rounded, () {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Grid view active')));
-        }),
+        GestureDetector(
+          onTap: () => _showCreatePlaylistDialog(context, provider),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF5D3FD3).withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFF5D3FD3).withOpacity(0.5),
+              ),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.add, color: Color(0xFF8F94FB), size: 18),
+                SizedBox(width: 4),
+                Text(
+                  "NEW",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
-    );
-  }
-
-  Widget _buildIconButton(IconData icon, VoidCallback onTap) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        child: Icon(icon, color: Colors.white70, size: 22),
-      ),
     );
   }
 
@@ -137,7 +179,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   }
 
   Widget _buildPlaylistGrid(
-    Map<String, List<dynamic>> filtered,
+    Map<String, List<SongModel>> filtered,
     MusicProvider provider,
   ) {
     if (filtered.isEmpty) return _buildEmptyState();
@@ -145,6 +187,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     return Expanded(
       child: GridView.builder(
         physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 100),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
           crossAxisSpacing: 15,
@@ -153,9 +196,9 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
         ),
         itemCount: filtered.length,
         itemBuilder: (context, index) {
-          String name = filtered.keys.elementAt(index);
-          int count = filtered[name]?.length ?? 0;
-          bool isLiked = name == "Liked";
+          final name = filtered.keys.elementAt(index);
+          final count = filtered[name]?.length ?? 0;
+          final isLiked = name == "Liked";
 
           return PlaylistCard(
             name: name,
@@ -172,61 +215,17 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Expanded(
+    return const Expanded(
       child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.playlist_add,
-              size: 80,
-              color: Colors.white.withValues(alpha: 0.3),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              _selectedFilter == "All Playlists"
-                  ? "No playlists found.\nCreate your first one!"
-                  : "No playlists in this category",
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white54, fontSize: 16),
-            ),
-          ],
+        child: Text(
+          "No playlists found.",
+          style: TextStyle(color: Colors.white54),
         ),
       ),
     );
   }
 
-  Widget _buildFAB(BuildContext context, MusicProvider provider) {
-    return FloatingActionButton.extended(
-      onPressed: () => _showCreatePlaylistDialog(context, provider),
-      backgroundColor: const Color(0xFF5D3FD3),
-      elevation: 8,
-      icon: const Icon(Icons.add, color: Colors.white, size: 24),
-      label: const Text(
-        "New Playlist",
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
-  // --- LOGIC & DIALOGS ---
-
-  Map<String, List<dynamic>> _filterPlaylists(
-    Map<String, List<dynamic>> playlists,
-  ) {
-    if (_selectedFilter == "Favorites") {
-      return {"Liked": playlists["Liked"] ?? []};
-    } else if (_selectedFilter == "My Mixes") {
-      return Map.fromEntries(
-        playlists.entries.where((entry) => entry.key != "Liked"),
-      );
-    }
-    return playlists;
-  }
+  // ───────────────────────────────── HELPERS ─────────────────────────────────
 
   List<Color> _getGradientForIndex(int index, bool isLiked) {
     if (isLiked) return [const Color(0xFFE91E63), const Color(0xFF9C27B0)];
@@ -268,120 +267,15 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     );
   }
 
-  void _showProfileMenu(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1A1A2E),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.person, color: Colors.white),
-            title: const Text(
-              "View Profile",
-              style: TextStyle(color: Colors.white),
-            ),
-            onTap: () => Navigator.pop(context),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showSearchDialog(
+  void _showProfileMenu(BuildContext context) {}
+  void _showMoreOptions(BuildContext context) {}
+  void _showCreatePlaylistDialog(
     BuildContext context,
-    Map<String, List<dynamic>> playlists,
-  ) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A2E),
-        title: const Text(
-          "Search Playlists",
-          style: TextStyle(color: Colors.white),
-        ),
-        content: const TextField(style: TextStyle(color: Colors.white)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Close"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showMoreOptions(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1A1A2E),
-      builder: (context) => ListTile(
-        leading: const Icon(Icons.sort, color: Colors.white),
-        title: const Text(
-          "Sort Playlists",
-          style: TextStyle(color: Colors.white),
-        ),
-        onTap: () => Navigator.pop(context),
-      ),
-    );
-  }
-
-  void _showCreatePlaylistDialog(BuildContext context, MusicProvider provider) {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A2E),
-        title: const Text(
-          "New Playlist",
-          style: TextStyle(color: Colors.white),
-        ),
-        content: TextField(
-          controller: controller,
-          style: const TextStyle(color: Colors.white),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (controller.text.trim().isNotEmpty) {
-                provider.createPlaylist(controller.text.trim());
-                Navigator.pop(context);
-              }
-            },
-            child: const Text("Create"),
-          ),
-        ],
-      ),
-    );
-  }
-
+    MusicProvider provider,
+  ) {}
   void _showPlaylistOptions(
     BuildContext context,
     String name,
     MusicProvider provider,
-  ) {
-    if (name == "Liked") return;
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1A1A2E),
-      builder: (context) => ListTile(
-        leading: const Icon(Icons.delete, color: Colors.red),
-        title: const Text(
-          "Delete Playlist",
-          style: TextStyle(color: Colors.red),
-        ),
-        onTap: () {
-          provider.deletePlaylist(name);
-          Navigator.pop(context);
-        },
-      ),
-    );
-  }
+  ) {}
 }

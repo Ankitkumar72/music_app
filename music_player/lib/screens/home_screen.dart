@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:on_audio_query/on_audio_query.dart';
+import '../logic/music_provider.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // Watch the provider to react to new playlists or history changes
+    final musicProvider = context.watch<MusicProvider>();
+
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          // 1. Custom App Bar with Profile and Notifications
+          // 1. App Bar with Profile and Notifications
           SliverAppBar(
             floating: true,
             backgroundColor: Colors.transparent,
@@ -16,9 +22,8 @@ class HomeScreen extends StatelessWidget {
             leading: const Padding(
               padding: EdgeInsets.all(8.0),
               child: CircleAvatar(
-                backgroundImage: NetworkImage(
-                  'https://placeholder.com/user_avatar.png',
-                ),
+                backgroundColor: Color(0xFF6332F6),
+                child: Icon(Icons.person, color: Colors.white),
               ),
             ),
             title: const Column(
@@ -42,46 +47,28 @@ class HomeScreen extends StatelessWidget {
             ],
           ),
 
-          // 2. Filter Category Chips (For You, Chill, Workout)
+          // 2. DYNAMIC Category Chips (Synced with your Hive Playlists)
           SliverToBoxAdapter(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
-                children: [
-                  _buildCategoryChip(
-                    "✨ For You",
-                    const Color(0xFFFFD700),
-                    Colors.black,
-                    true,
-                  ),
-                  _buildCategoryChip(
-                    "🌙 Chill",
-                    Colors.white12,
-                    Colors.white,
-                    false,
-                  ),
-                  _buildCategoryChip(
-                    "🏋️ Workout",
-                    Colors.white12,
-                    Colors.white,
-                    false,
-                  ),
-                  _buildCategoryChip(
-                    "⚙️ Mood",
-                    Colors.white12,
-                    Colors.white,
-                    false,
-                  ),
-                ],
+                children: musicProvider.playlistNames.map((name) {
+                  return _buildCategoryChip(context, name);
+                }).toList(),
               ),
             ),
           ),
 
-          // 3. "Your Daily Mix" Section Header
-          _buildSectionHeader("✨ Your Daily Mix"),
+          // 3. Your Daily Mix Section Header
+          _buildSectionHeader(
+            context,
+            "✨ Your Daily Mix",
+            musicProvider.dailyMixSongs,
+            const Color(0xFF5D4037),
+          ),
 
-          // 4. Large Horizontal Cards (Daily Mix 1, Discovery)
+          // 4. Large Horizontal Cards (Daily Mix 1 & Discovery)
           SliverToBoxAdapter(
             child: SizedBox(
               height: 350,
@@ -89,58 +76,133 @@ class HomeScreen extends StatelessWidget {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 children: [
+                  // Daily Mix 1: Dynamic artists from songs played 3+ times
                   _buildLargeDailyMixCard(
+                    context,
                     "Daily Mix 1",
-                    "The Weeknd, Daft Punk, Tame Impala & more",
+                    musicProvider.dailyMixSongs.isEmpty
+                        ? "Play more to build your mix"
+                        : musicProvider.dailyMixSongs
+                              .map((s) => s.artist ?? "Unknown")
+                              .toSet()
+                              .take(3)
+                              .join(", "),
                     const Color(0xFF5D4037),
+                    musicProvider.dailyMixSongs,
                   ),
+                  // Discovery: Picks 10 random songs from your library
                   _buildLargeDailyMixCard(
+                    context,
                     "Discovery",
                     "New music picked just for you",
                     const Color(0xFF455A64),
+                    musicProvider.discoverySongs,
                   ),
                 ],
               ),
             ),
           ),
 
-          // 5. "Jump Back In" Section Header
-          _buildSectionHeader("Jump Back In"),
+          // 5. Jump Back In Section Header
+          _buildSectionHeader(
+            context,
+            "Jump Back In",
+            musicProvider.recentlyPlayed,
+            const Color(0xFF6332F6),
+          ),
 
-          // 6. Smaller Square Cards
+          // 6. Smaller Square Cards (Recently Played History)
           SliverToBoxAdapter(
             child: SizedBox(
               height: 180,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                children: [
-                  _buildSmallRecentCard(
-                    "Neon Lights",
-                    "https://placeholder.com/album1.png",
-                  ),
-                  _buildSmallRecentCard(
-                    "Abstract Flow",
-                    "https://placeholder.com/album2.png",
-                  ),
-                  _buildSmallRecentCard(
-                    "Rock Classics",
-                    "https://placeholder.com/album3.png",
-                  ),
-                ],
-              ),
+              child: musicProvider.recentlyPlayed.isEmpty
+                  ? const Center(
+                      child: Text(
+                        "No history",
+                        style: TextStyle(color: Colors.white24),
+                      ),
+                    )
+                  : ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: musicProvider.recentlyPlayed.length,
+                      itemBuilder: (context, index) {
+                        final song = musicProvider.recentlyPlayed[index];
+                        return GestureDetector(
+                          onTap: () => musicProvider.playSong(
+                            index,
+                            customList: musicProvider.recentlyPlayed,
+                          ),
+                          child: _buildSmallRecentCard(song.title, song.id),
+                        );
+                      },
+                    ),
             ),
           ),
 
-          // 7. Extra Padding for the Mini Player at the bottom
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
+          // Bottom Padding for Mini Player and Navigation Bar
+          const SliverToBoxAdapter(child: SizedBox(height: 110)),
         ],
       ),
     );
   }
 
-  // Helper: Section Headers
-  Widget _buildSectionHeader(String title) {
+  // --- Helper: Dynamic Category Chip ---
+  Widget _buildCategoryChip(BuildContext context, String label) {
+    final provider = context.read<MusicProvider>();
+    final isActive = provider.activeCategory == label;
+
+    return GestureDetector(
+      onTap: () {
+        provider.setActiveCategory(label); // Update selection state
+        final playlistSongs =
+            provider.allPlaylists[label] ?? []; // Fetch specific playlist data
+
+        // Navigate directly to the detailed view of the selected playlist
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MixDetailScreen(
+              title: label,
+              songs: playlistSongs,
+              themeColor: const Color(0xFF6332F6),
+            ),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? const Color(0xFFFFD700) : Colors.white12,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFFFFD700).withOpacity(0.3),
+                    blurRadius: 10,
+                  ),
+                ]
+              : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isActive ? Colors.black : Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- Helper: Section Headers with Navigation ---
+  Widget _buildSectionHeader(
+    BuildContext context,
+    String title,
+    List<SongModel> songList,
+    Color theme,
+  ) {
     return SliverPadding(
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
       sliver: SliverToBoxAdapter(
@@ -151,12 +213,24 @@ class HomeScreen extends StatelessWidget {
               title,
               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
-            const Text(
-              "SEE ALL",
-              style: TextStyle(
-                color: Colors.blueAccent,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => MixDetailScreen(
+                    title: title,
+                    songs: songList,
+                    themeColor: theme,
+                  ),
+                ),
+              ),
+              child: const Text(
+                "SEE ALL",
+                style: TextStyle(
+                  color: Colors.blueAccent,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
               ),
             ),
           ],
@@ -165,66 +239,61 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // Helper: Category Chips
-  Widget _buildCategoryChip(
-    String label,
-    Color bgColor,
-    Color txtColor,
-    bool isActive,
+  // --- Helper: Large Horizontal Cards ---
+  Widget _buildLargeDailyMixCard(
+    BuildContext context,
+    String title,
+    String subtitle,
+    Color color,
+    List<SongModel> songList,
   ) {
-    return Container(
-      margin: const EdgeInsets.only(right: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: isActive
-            ? [BoxShadow(color: bgColor.withValues(alpha: 0.3), blurRadius: 10)]
-            : null,
-      ),
-      child: Text(
-        label,
-        style: TextStyle(color: txtColor, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-
-  // Helper: Large Mix Cards
-  Widget _buildLargeDailyMixCard(String title, String subtitle, Color color) {
-    return Container(
-      width: 260,
-      margin: const EdgeInsets.only(right: 16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(32),
-        gradient: LinearGradient(
-          colors: [color, color.withValues(alpha: 0.5)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              MixDetailScreen(title: title, songs: songList, themeColor: color),
         ),
       ),
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            backgroundColor: Colors.yellow,
-            child: const Icon(Icons.play_arrow, color: Colors.black),
+      child: Container(
+        width: 260,
+        margin: const EdgeInsets.only(right: 16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(32),
+          gradient: LinearGradient(
+            colors: [color, color.withOpacity(0.5)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 4),
-          Text(subtitle, style: const TextStyle(color: Colors.white70)),
-        ],
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const CircleAvatar(
+              backgroundColor: Color(0xFFFFD700),
+              child: Icon(Icons.play_arrow, color: Colors.black),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
+            Text(
+              subtitle,
+              style: const TextStyle(color: Colors.white70),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  // Helper: Small Square Cards
-  Widget _buildSmallRecentCard(String title, String imageUrl) {
+  // --- Helper: Small Square Cards with Artwork logic ---
+  Widget _buildSmallRecentCard(String title, int songId) {
     return Container(
       width: 140,
       margin: const EdgeInsets.only(right: 16),
@@ -237,7 +306,17 @@ class HomeScreen extends StatelessWidget {
               color: Colors.white12,
               height: 140,
               width: 140,
-            ), // Placeholder
+              child: QueryArtworkWidget(
+                id: songId,
+                type: ArtworkType.AUDIO,
+                // Fixed: Correct parameter name for modern on_audio_query versions
+                nullArtworkWidget: const Icon(
+                  Icons.music_note,
+                  color: Colors.white24,
+                  size: 50,
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 8),
           Text(
@@ -245,6 +324,79 @@ class HomeScreen extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.w600),
             overflow: TextOverflow.ellipsis,
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// --- Dynamic Detail Screen Class ---
+class MixDetailScreen extends StatelessWidget {
+  final String title;
+  final List<SongModel> songs;
+  final Color themeColor;
+
+  const MixDetailScreen({
+    super.key,
+    required this.title,
+    required this.songs,
+    required this.themeColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0A12),
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            expandedHeight: 200,
+            pinned: true,
+            flexibleSpace: FlexibleSpaceBar(
+              title: Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              background: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [themeColor, Colors.black],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SliverList(
+            delegate: SliverChildBuilderDelegate((context, index) {
+              final song = songs[index];
+              return ListTile(
+                leading: QueryArtworkWidget(
+                  id: song.id,
+                  type: ArtworkType.AUDIO,
+                  nullArtworkWidget: const Icon(
+                    Icons.music_note,
+                    color: Colors.white24,
+                  ),
+                ),
+                title: Text(
+                  song.title,
+                  style: const TextStyle(color: Colors.white),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  song.artist ?? "Unknown",
+                  style: const TextStyle(color: Colors.grey),
+                ),
+                onTap: () => context.read<MusicProvider>().playSong(
+                  index,
+                  customList: songs,
+                ),
+              );
+            }, childCount: songs.length),
+          ),
+          const SliverToBoxAdapter(child: SizedBox(height: 100)),
         ],
       ),
     );
