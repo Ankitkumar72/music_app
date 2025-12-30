@@ -225,6 +225,100 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     );
   }
 
+  // ───────────────────────── CREATE PLAYLIST (FIXED) ─────────────────────────
+
+  void _showCreatePlaylistDialog(BuildContext context, MusicProvider provider) {
+    final TextEditingController controller = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF121212),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          top: 32,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "Give your playlist a name",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 28),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              style: const TextStyle(color: Colors.white, fontSize: 22),
+              decoration: const InputDecoration(
+                hintText: "My playlist #1",
+                hintStyle: TextStyle(color: Colors.white38),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white24),
+                ),
+                focusedBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Color(0xFF1DB954)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 32),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    "Cancel",
+                    style: TextStyle(color: Colors.white60, fontSize: 15),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                SizedBox(
+                  height: 42,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      final name = controller.text.trim();
+                      if (name.isNotEmpty) {
+                        provider.createPlaylist(name);
+                        Navigator.pop(context);
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color.fromARGB(255, 230, 209, 22),
+                      foregroundColor: Colors.black,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 28),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                    child: const Text(
+                      "Create",
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ───────────────────────────────── HELPERS ─────────────────────────────────
 
   List<Color> _getGradientForIndex(int index, bool isLiked) {
@@ -269,10 +363,6 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
 
   void _showProfileMenu(BuildContext context) {}
   void _showMoreOptions(BuildContext context) {}
-  void _showCreatePlaylistDialog(
-    BuildContext context,
-    MusicProvider provider,
-  ) {}
   void _showPlaylistOptions(
     BuildContext context,
     String name,
