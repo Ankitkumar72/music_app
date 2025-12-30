@@ -1,37 +1,59 @@
-# Pixy Music Player 🎵
+---
 
-**Pixy** is a high-performance, lightweight local music player built with Flutter. It focuses on a smooth user experience by utilizing optimized state management for real-time seek bar updates and efficient asset rendering.
+# Pixy Player 🎵
+
+**Pixy** is a modern, high-performance Flutter music player designed for local audio playback. It features a dynamic UI that syncs with your listening habits, smart playlist management, and a robust state management system powered by Provider.
+
+---
 
 ## ✨ Features
 
-* **Local Library Scanning:** Automatically queries and lists all audio files from your device.
-* **High-Performance Seek Bar:** Uses `ValueNotifier` to handle progress and buffering updates without rebuilding the entire UI, ensuring 60+ FPS.
-* **Album Art Support:** Dynamically fetches and displays high-quality artwork using the `on_audio_query` engine.
-* **Dual-Layer Slider:** A sophisticated progress bar that shows both the current playback position and the buffered data.
-* **Modern Dark UI:** A sleek, minimal aesthetic designed for focus and ease of use.
-* **Smart Permissions:** Seamlessly handles storage and audio permissions for Android and iOS.
+### 🏠 Dynamic Home Screen
+
+* **Your Daily Mix**: Automatically populates with your "hits"—songs you've played 3 or more times.
+* **Discovery Mix**: A randomly generated selection of 10 songs from your library to keep your listening experience fresh.
+* **Jump Back In**: A persistence-based "Recently Played" section that tracks and displays your last 10 tracks.
+* **Synced Categories**: Top chips are dynamically generated from your Hive-stored playlists.
+
+### 📂 Smart Playlist Management
+
+* **Hive Persistence**: All playlists, play counts, and history are saved locally using Hive for near-instant load times.
+* **Intelligent Search**: A deep-search algorithm that filters playlists by name, song title, or artist name with case-insensitivity.
+* **Category Tabs**: Easily filter between "All Playlists," "Favorites," and custom "My Mixes".
+
+### 🎧 Audio & Performance
+
+* **OnAudioQuery**: Efficiently fetches and manages local `.mp3` and `.m4a` files from device storage.
+* **JustAudio**: High-fidelity audio playback with support for shuffling, looping, and gapless transitions.
+* **Mini-Player**: A persistent UI element across the app for quick playback control.
+
+---
 
 ## 🛠️ Tech Stack
 
-* **Framework:** [Flutter](https://flutter.dev/)
-* **Audio Engine:** [just_audio](https://pub.dev/packages/just_audio)
-* **Storage Query:** [on_audio_query](https://pub.dev/packages/on_audio_query/versions)
-* **Permissions:** [permission_handler](https://pub.dev/packages/permission_handler)
+| Component | Technology |
+| --- | --- |
+| **Language** | Dart / Flutter |
+| **State Management** | Provider |
+| **Audio Library** | `on_audio_query` & `just_audio` |
+| **Local Database** | Hive |
+| **Permissions** | `permission_handler` |
+
+---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
-* Flutter SDK: `>=3.0.0`
-* Android API Level: 21 or higher
-* iOS: 12.0 or higher
+* Flutter SDK (Latest Version)
+* Android Studio / VS Code
+* An Android device or emulator with audio files
 
 ### Installation
 
 1. **Clone the repository:**
 ```bash
-git clone https://github.com/your-username/pixy-music-player.git
-cd pixy-music-player
+git clone https://github.com/Ankitkumar72/music_app.git
 
 ```
 
@@ -43,26 +65,7 @@ flutter pub get
 ```
 
 
-3. **Platform Setup:**
-* **Android:** Add the following to your `AndroidManifest.xml`:
-```xml
-<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-<uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
-
-```
-
-
-* **iOS:** Add the following to your `Info.plist`:
-```xml
-<key>NSAppleMusicUsageDescription</key>
-<string>Pixy needs access to your music library to play local songs.</string>
-
-```
-
-
-
-
-4. **Run the app:**
+3. **Run the app:**
 ```bash
 flutter run
 
@@ -70,13 +73,34 @@ flutter run
 
 
 
-## 🏗️ Project Architecture
+---
 
-The app is designed with performance in mind:
+## 🏗️ Project Structure
 
-* **State Management:** Utilizes `ValueNotifier` for granular UI updates (Position, Duration, Buffered state).
-* **Caching:** Implements `Widget` caching for the song list and artwork to prevent flickering during list scrolling.
-* **Rendering:** Uses `RepaintBoundary` to isolate the "Now Playing" section from the "Song List" section, reducing the paint cost during playback animations.
+```text
+lib/
+├── logic/
+│   ├── music_provider.dart    # Central state & audio logic
+│   └── models/
+│       └── song_data.dart     # Hive TypeAdapters for Playlists
+├── screens/
+│   ├── home_screen.dart       # Dynamic dashboard
+│   ├── playlist_screen.dart   # Searchable playlist manager
+│   └── mix_detail_screen.dart # Filtered list view for mixes
+└── widgets/
+    ├── mini_player.dart       # Global playback controller
+    └── playlist_card.dart     # Custom UI for playlist tiles
 
-## 📸 Screenshots
+```
 
+---
+
+## 🤝 Contributing
+
+Feel free to fork this project and submit pull requests. For major changes, please open an issue first to discuss what you would like to change.
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+---
