@@ -1,10 +1,10 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:on_audio_query/on_audio_query.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../logic/music_provider.dart';
+import '../widgets/rotating_cd.dart';
 
 class NowPlayingScreen extends StatefulWidget {
   const NowPlayingScreen({super.key});
@@ -13,25 +13,8 @@ class NowPlayingScreen extends StatefulWidget {
   State<NowPlayingScreen> createState() => _NowPlayingScreenState();
 }
 
-class _NowPlayingScreenState extends State<NowPlayingScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _rotationController;
+class _NowPlayingScreenState extends State<NowPlayingScreen> {
   double? _dragValue;
-
-  @override
-  void initState() {
-    super.initState();
-    _rotationController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 15),
-    );
-  }
-
-  @override
-  void dispose() {
-    _rotationController.dispose();
-    super.dispose();
-  }
 
   // ───── PLAYLIST MENU ─────
   void _showPlaylistMenu(BuildContext context, MusicProvider provider) {
@@ -56,14 +39,13 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
               ),
               const SizedBox(height: 10),
 
-              // Liked playlist shortcut
+              // Liked playlist
               ListTile(
                 leading: const Icon(Icons.favorite, color: Colors.red),
                 title: const Text("Liked Songs"),
                 onTap: () {
                   provider.toggleLike(currentSong);
                   Navigator.pop(context);
-                  _showSnackBar(context, "Updated Liked Songs");
                 },
               ),
 
@@ -75,15 +57,11 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
                   shrinkWrap: true,
                   children: provider.playlistNames.map((name) {
                     return ListTile(
-                      leading: const Icon(
-                        Icons.playlist_add,
-                        color: Colors.amber,
-                      ),
+                      leading: const Icon(Icons.playlist_add),
                       title: Text(name),
                       onTap: () {
                         provider.addToPlaylist(name, currentSong);
                         Navigator.pop(context);
-                        _showSnackBar(context, "Added to $name");
                       },
                     );
                   }).toList(),
@@ -96,12 +74,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
     );
   }
 
-  void _showSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), duration: const Duration(seconds: 1)),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final musicProvider = context.watch<MusicProvider>();
@@ -109,15 +81,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
 
     if (currentSong == null) {
       return const Scaffold(body: Center(child: Text("No song playing")));
-    }
-
-    // ───── ROTATION SYNC ─────
-    if (musicProvider.isPlaying) {
-      if (!_rotationController.isAnimating) {
-        _rotationController.repeat();
-      }
-    } else {
-      _rotationController.stop();
     }
 
     return Scaffold(
@@ -159,54 +122,15 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
 
             const Spacer(),
 
-            // ───── ROTATING CD ─────
-            AnimatedBuilder(
-              animation: _rotationController,
-              builder: (_, child) {
-                return Transform.rotate(
-                  angle: _rotationController.value * 2 * pi,
-                  child: child,
-                );
-              },
-              child: Container(
-                width: 280,
-                height: 280,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF6332F6).withValues(alpha: 0.4),
-                      blurRadius: 50,
-                      spreadRadius: 2,
-                    ),
-                  ],
-                ),
-                child: ClipOval(
-                  child: QueryArtworkWidget(
-                    id: currentSong.id,
-                    type: ArtworkType.AUDIO,
-                    artworkWidth: 280,
-                    artworkHeight: 280,
-                    nullArtworkWidget: Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Color(0xFF6332F6), Colors.black],
-                        ),
-                      ),
-                      child: const Icon(
-                        Icons.music_note,
-                        size: 100,
-                        color: Colors.white24,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+            // ───── ROTATING CD (FIXED & DYNAMIC) ─────
+            RotatingCD(
+              songId: currentSong.id,
+              isPlaying: musicProvider.isPlaying,
             ),
 
             const Spacer(),
 
-            // ───── SONG INFO + LIKE (FIXED) ─────
+            // ───── SONG INFO + LIKE ─────
             Row(
               children: [
                 Expanded(
@@ -223,7 +147,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
                         ),
                       ),
                       Text(
-                        currentSong.artist ?? "Unknown Artist",
+                        (currentSong.artist == null ||
+                                currentSong.artist == "<unknown>")
+                            ? "Local file"
+                            : currentSong.artist!,
                         style: const TextStyle(
                           fontSize: 18,
                           color: Colors.grey,
@@ -233,9 +160,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
                   ),
                 ),
                 GestureDetector(
-                  onTap: () {
-                    musicProvider.toggleLike(currentSong);
-                  },
+                  onTap: () => musicProvider.toggleLike(currentSong),
                   onLongPress: () => _showPlaylistMenu(context, musicProvider),
                   child: Icon(
                     musicProvider.isLiked(currentSong)

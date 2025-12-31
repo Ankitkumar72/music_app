@@ -8,13 +8,25 @@ import '../screens/now_playing_screen.dart';
 class MiniPlayer extends StatelessWidget {
   const MiniPlayer({super.key});
 
+  List<Color> _generateSongGradient(int seed) {
+    final gradients = [
+      [const Color(0xFF4E54C8), const Color(0xFF8F94FB)],
+      [const Color(0xFFFF6B6B), const Color(0xFFFFE66D)],
+      [const Color(0xFF2193b0), const Color(0xFF6dd5ed)],
+      [const Color(0xFF1DB954), const Color(0xFF1ED760)],
+      [const Color(0xFFcc2b5e), const Color(0xFF753a88)],
+    ];
+    return gradients[seed.abs() % gradients.length];
+  }
+
   @override
   Widget build(BuildContext context) {
     final musicProvider = context.watch<MusicProvider>();
     final currentSong = musicProvider.currentSong;
 
-    // Hide mini player if nothing is playing
     if (currentSong == null) return const SizedBox.shrink();
+
+    final gradientColors = _generateSongGradient(currentSong.id);
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -37,9 +49,8 @@ class MiniPlayer extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // 🎵 Artwork
             ClipRRect(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
               child: QueryArtworkWidget(
                 id: currentSong.id,
                 type: ArtworkType.AUDIO,
@@ -48,8 +59,18 @@ class MiniPlayer extends StatelessWidget {
                 nullArtworkWidget: Container(
                   width: 45,
                   height: 45,
-                  color: Colors.grey,
-                  child: const Icon(Icons.music_note),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: gradientColors,
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.music_note,
+                    color: Colors.white70,
+                    size: 20,
+                  ),
                 ),
               ),
             ),
@@ -66,10 +87,16 @@ class MiniPlayer extends StatelessWidget {
                     currentSong.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
                   ),
                   Text(
-                    currentSong.artist ?? "Unknown Artist",
+                    (currentSong.artist == null ||
+                            currentSong.artist == "<unknown>")
+                        ? "Local file"
+                        : currentSong.artist!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 12, color: Colors.grey),
@@ -90,7 +117,7 @@ class MiniPlayer extends StatelessWidget {
                     ? Icons.pause_circle_filled
                     : Icons.play_circle_filled,
                 size: 40,
-                color: const Color(0xFF6332F6),
+                color: gradientColors[1],
               ),
             ),
             IconButton(
