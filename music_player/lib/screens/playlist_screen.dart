@@ -29,15 +29,13 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
 
     final filteredPlaylists = _filterAndSearchPlaylists(allPlaylists);
 
-    // 🔧 FIX: Wrap in PopScope to prevent back button from closing the app
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        // Navigation logic can be added here if you wish to switch tabs
       },
       child: Scaffold(
-        extendBody: true, // ✅ Keeping your required fix
+        extendBody: true,
         backgroundColor: const Color(0xFF0A0A12),
         body: SafeArea(
           child: Padding(
@@ -199,8 +197,12 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
       child: MiniPlayerSafeScroll(
         child: GridView.builder(
           physics: const BouncingScrollPhysics(),
-          // 🔧 FIX: Added padding to ensure last row is visible
-          padding: const EdgeInsets.only(bottom: 160),
+
+          // ✅ ONLY REQUIRED CHANGE
+          padding: EdgeInsets.only(
+            bottom: provider.currentSong != null ? 160.0 : 20.0,
+          ),
+
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
             crossAxisSpacing: 15,

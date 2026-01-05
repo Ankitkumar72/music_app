@@ -16,15 +16,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // context.watch ensures the UI updates when notifyListeners() is called in the provider
     final musicProvider = context.watch<MusicProvider>();
 
-    // Wrap in PopScope to handle back-button logic correctly
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) {
         if (didPop) return;
-        // Navigation logic can be added here if you want to switch tabs on back-press
       },
       child: Scaffold(
         backgroundColor: const Color(0xFF0A0A12),
@@ -76,9 +73,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ),
         IconButton(
           icon: const Icon(Icons.search, color: Colors.white, size: 28),
-          onPressed: () {
-            // Logic for searching within the library
-          },
+          onPressed: () {},
         ),
       ],
     );
@@ -103,12 +98,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  // 3. Round Shuffle All Button - Linked to MusicProvider
+  // 3. Round Shuffle All Button
   Widget _buildShuffleButton(MusicProvider provider) {
     return Center(
       child: ElevatedButton.icon(
         onPressed: () {
-          // Calls the shuffleAndPlay method we added to your provider
           provider.shuffleAndPlay();
         },
         icon: const Icon(Icons.shuffle, color: Colors.white, size: 20),
@@ -130,19 +124,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  // 4. Content based on selected category - Now using REAL data
+  // 4. Content based on selected category
   Widget _buildCategoryContent(MusicProvider provider) {
-    // Use the actual song list from the provider
     final songs = provider.allSongs;
 
-    // Show a loading indicator if the app is still fetching songs
     if (provider.isLoading) {
       return const Center(
         child: CircularProgressIndicator(color: Color(0xFF5D3FD3)),
       );
     }
 
-    // Handle the empty state if no songs are found on the device
     if (songs.isEmpty) {
       return const Center(
         child: Text(
@@ -155,8 +146,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
     return ListView.builder(
       itemCount: songs.length,
       physics: const BouncingScrollPhysics(),
-      // 🔧 FIX: Added bottom padding to clear the Mini Player
-      padding: const EdgeInsets.only(bottom: 160),
+
+      // ✅ ONLY FIX APPLIED HERE
+      padding: EdgeInsets.only(bottom: provider.currentSong != null ? 160 : 0),
+
       itemBuilder: (context, index) {
         final song = songs[index];
         return ListTile(
@@ -168,7 +161,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
               color: Colors.white10,
               borderRadius: BorderRadius.circular(8),
             ),
-            // Updated to fetch actual local artwork
             child: QueryArtworkWidget(
               id: song.id,
               type: ArtworkType.AUDIO,
@@ -179,7 +171,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ),
           ),
           title: Text(
-            song.title, // Accesses the real title from SongModel
+            song.title,
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w500,
@@ -188,12 +180,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
             overflow: TextOverflow.ellipsis,
           ),
           subtitle: Text(
-            song.artist ?? "Unknown Artist", // Accesses the real artist
+            song.artist ?? "Unknown Artist",
             style: const TextStyle(color: Colors.white54, fontSize: 12),
           ),
           trailing: const Icon(Icons.more_horiz, color: Colors.white54),
           onTap: () {
-            // Plays the specific song from the library
             provider.playSong(index);
           },
         );
