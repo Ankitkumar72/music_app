@@ -3,7 +3,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'home_screen.dart';
 import 'library_screen.dart';
 import 'search_screen.dart';
-import 'playlist_screen.dart'; // ← ADD THIS IMPORT
+import 'playlist_screen.dart';
 import '../widgets/mini_player.dart';
 
 class NavigationShell extends StatefulWidget {
@@ -31,12 +31,11 @@ class _NavigationShellState extends State<NavigationShell> {
     setState(() => _hasPermission = status.isGranted);
   }
 
-  // ✅ FIXED: Replace placeholder with actual PlaylistScreen
   final List<Widget> _screens = [
     const HomeScreen(),
     const LibraryScreen(),
     const SearchScreen(),
-    const PlaylistScreen(), // ← CHANGED THIS LINE
+    const PlaylistScreen(),
     const Center(child: Text("Settings")),
   ];
 
