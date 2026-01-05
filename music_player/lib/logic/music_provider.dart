@@ -1,7 +1,12 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:hive/hive.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:dio/dio.dart';
 
 import 'models/song_data.dart';
 
@@ -16,9 +21,12 @@ class MusicProvider extends ChangeNotifier {
   final Map<String, List<SongModel>> _playlists = {"Liked": []};
 
   // ================= SYNC DATA =================
-  Map<int, int> _playCounts = {}; // songId : count
-  List<int> _recentIds = []; // recently played song IDs
+  Map<int, int> _playCounts = {};
+  List<int> _recentIds = [];
   String _activeCategory = "✨ For You";
+
+  // Cache for internet artwork paths
+  final Map<int, String?> _artworkCache = {};
 
   // ================= STATE =================
   int _currentIndex = -1;
@@ -29,6 +37,7 @@ class MusicProvider extends ChangeNotifier {
 
   // ================= HIVE =================
   late Box<PlaylistData> _playlistBox;
+  late Box<CachedMetadata> _metadataBox; // New box for artwork paths
   late Box _statsBox;
   bool _isHiveReady = false;
 
@@ -51,18 +60,18 @@ class MusicProvider extends ChangeNotifier {
       ? _allSongs[_currentIndex]
       : null;
 
+  // Helper to check if custom artwork exists
+  String? getCustomArtwork(int songId) => _artworkCache[songId];
+
   // ================= HOME LOGIC =================
-  // 1. Daily Mix: Songs played 3 or more times
   List<SongModel> get dailyMixSongs =>
       _songs.where((s) => (_playCounts[s.id] ?? 0) >= 3).toList();
 
-  // 2. Discovery: Returns 10 random songs from the library
   List<SongModel> get discoverySongs {
     final shuffled = List<SongModel>.from(_songs)..shuffle();
     return shuffled.take(10).toList();
   }
 
-  // 3. Jump Back In: Recently played songs (last 10)
   List<SongModel> get recentlyPlayed {
     final result = <SongModel>[];
     for (final id in _recentIds) {
@@ -78,13 +87,11 @@ class MusicProvider extends ChangeNotifier {
   MusicProvider() {
     _initHive();
 
-    // PLAY / PAUSE STATE
     _audioPlayer.playingStream.listen((playing) {
       _isPlaying = playing;
       notifyListeners();
     });
 
-    // TRACK CHANGE
     _audioPlayer.currentIndexStream.listen((index) {
       if (index != null && _currentIndex != index) {
         _currentIndex = index;
@@ -93,7 +100,6 @@ class MusicProvider extends ChangeNotifier {
       }
     });
 
-    // HANDLE PLAYBACK COMPLETION
     _audioPlayer.processingStateStream.listen((state) {
       if (state == ProcessingState.completed) {
         _currentIndex = -1;
@@ -107,6 +113,7 @@ class MusicProvider extends ChangeNotifier {
   Future<void> _initHive() async {
     try {
       _playlistBox = await Hive.openBox<PlaylistData>('playlists');
+      _metadataBox = await Hive.openBox<CachedMetadata>('metadata'); //
       _statsBox = await Hive.openBox('stats');
       _isHiveReady = true;
 
@@ -114,6 +121,11 @@ class MusicProvider extends ChangeNotifier {
         _statsBox.get('playCounts', defaultValue: {}),
       );
       _recentIds = List<int>.from(_statsBox.get('recentIds', defaultValue: []));
+
+      // Load cached metadata into memory
+      for (var meta in _metadataBox.values) {
+        _artworkCache[meta.songId] = meta.localImagePath;
+      }
 
       if (_songs.isNotEmpty) _syncWithHive();
     } catch (e) {
@@ -123,13 +135,11 @@ class MusicProvider extends ChangeNotifier {
 
   void _syncWithHive() {
     if (!_isHiveReady) return;
-
     for (final data in _playlistBox.values) {
       final matchedSongs = _songs
           .where((s) => data.songIds.contains(s.id))
           .toList();
       _playlists[data.name] = matchedSongs;
-
       if (data.name == "Liked") {
         _likedSongs
           ..clear()
@@ -139,21 +149,60 @@ class MusicProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // SAFE INDEX VALIDATION
+  // ================= ARTWORK FETCHER (iTunes API) =================
+  Future<void> fetchInternetArtwork(SongModel song) async {
+    // Skip if already cached
+    if (_artworkCache.containsKey(song.id)) return;
+
+    try {
+      final term = Uri.encodeComponent("${song.title} ${song.artist}");
+      final url =
+          "https://itunes.apple.com/search?term=$term&entity=song&limit=1";
+
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['resultCount'] > 0) {
+          // Get high-res version
+          String imageUrl = data['results'][0]['artworkUrl100'].replaceAll(
+            '100x100bb',
+            '600x600bb',
+          );
+
+          Directory dir = await getApplicationDocumentsDirectory();
+          String filePath = "${dir.path}/art_${song.id}.jpg";
+
+          await Dio().download(imageUrl, filePath);
+
+          // Save to Hive and Cache
+          _artworkCache[song.id] = filePath;
+          await _metadataBox.put(
+            song.id,
+            CachedMetadata(songId: song.id, localImagePath: filePath),
+          );
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint("Metadata fetch error: $e");
+    }
+  }
+
   void _validateCurrentIndex() {
     if (_currentIndex < 0 || _currentIndex >= _allSongs.length) {
       _currentIndex = -1;
     }
   }
 
-  // ================= STATS =================
+  // ================= STATS & AUTO-FETCH ART =================
   void _handleSongChange(int index) {
     if (index < 0 || index >= _allSongs.length) return;
-
     final song = _allSongs[index];
 
-    _playCounts[song.id] = (_playCounts[song.id] ?? 0) + 1;
+    // Trigger internet artwork check when a song starts
+    fetchInternetArtwork(song);
 
+    _playCounts[song.id] = (_playCounts[song.id] ?? 0) + 1;
     _recentIds.remove(song.id);
     _recentIds.insert(0, song.id);
     if (_recentIds.length > 20) _recentIds.removeLast();
@@ -185,14 +234,9 @@ class MusicProvider extends ChangeNotifier {
           sortType: SongSortType.TITLE,
           uriType: UriType.EXTERNAL,
         );
-
         final wasPlaying = _currentIndex >= 0;
-
         _allSongs = List.from(_songs);
-
-        // PREVENT MINI PLAYER GLITCH ON REFRESH
         if (wasPlaying) _validateCurrentIndex();
-
         if (_isHiveReady) _syncWithHive();
       }
     } catch (e) {
@@ -215,7 +259,6 @@ class MusicProvider extends ChangeNotifier {
       _allSongs = customList;
       _validateCurrentIndex();
     }
-
     if (index < 0 || index >= _allSongs.length) return;
 
     try {
@@ -224,7 +267,6 @@ class MusicProvider extends ChangeNotifier {
         initialIndex: index,
         initialPosition: Duration.zero,
       );
-
       _currentIndex = index;
       _audioPlayer.play();
       notifyListeners();
@@ -245,7 +287,6 @@ class MusicProvider extends ChangeNotifier {
   }
 
   void playNext() => _audioPlayer.hasNext ? _audioPlayer.seekToNext() : null;
-
   void playPrevious() =>
       _audioPlayer.hasPrevious ? _audioPlayer.seekToPrevious() : null;
 
@@ -309,7 +350,6 @@ class MusicProvider extends ChangeNotifier {
         : _loopMode == LoopMode.all
         ? LoopMode.one
         : LoopMode.off;
-
     _audioPlayer.setLoopMode(_loopMode);
     notifyListeners();
   }

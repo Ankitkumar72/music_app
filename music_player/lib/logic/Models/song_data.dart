@@ -26,3 +26,14 @@ class PlaylistData extends HiveObject {
 
   PlaylistData({required this.name, required this.songIds});
 }
+
+@HiveType(typeId: 2) // Ensure this is unique
+class CachedMetadata extends HiveObject {
+  @HiveField(0)
+  final int songId;
+
+  @HiveField(1)
+  final String? localImagePath;
+
+  CachedMetadata({required this.songId, this.localImagePath});
+}

@@ -82,3 +82,40 @@ class PlaylistDataAdapter extends TypeAdapter<PlaylistData> {
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }
+
+class CachedMetadataAdapter extends TypeAdapter<CachedMetadata> {
+  @override
+  final int typeId = 2;
+
+  @override
+  CachedMetadata read(BinaryReader reader) {
+    final numOfFields = reader.readByte();
+    final fields = <int, dynamic>{
+      for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
+    };
+    return CachedMetadata(
+      songId: fields[0] as int,
+      localImagePath: fields[1] as String?,
+    );
+  }
+
+  @override
+  void write(BinaryWriter writer, CachedMetadata obj) {
+    writer
+      ..writeByte(2)
+      ..writeByte(0)
+      ..write(obj.songId)
+      ..writeByte(1)
+      ..write(obj.localImagePath);
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CachedMetadataAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
+}

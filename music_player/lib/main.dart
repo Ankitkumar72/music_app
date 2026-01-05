@@ -13,8 +13,15 @@ void main() async {
   await Hive.initFlutter();
   Hive.registerAdapter(SongDataAdapter());
   Hive.registerAdapter(PlaylistDataAdapter());
+  // FIXED: Added registration for the internet artwork cache
+  Hive.registerAdapter(CachedMetadataAdapter());
 
-  // 3. Run the App with MultiProvider
+  // 3. Open required Hive boxes before Provider initialization
+  await Hive.openBox<PlaylistData>('playlists');
+  await Hive.openBox<CachedMetadata>('metadata');
+  await Hive.openBox('stats');
+
+  // 4. Run the App with MultiProvider
   runApp(
     MultiProvider(
       providers: [

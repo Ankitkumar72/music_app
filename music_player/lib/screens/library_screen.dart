@@ -1,6 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:on_audio_query/on_audio_query.dart'; // Needed for Artwork widget
+import 'package:on_audio_query/on_audio_query.dart';
 import '../logic/music_provider.dart';
 import '../widgets/filter_tab.dart';
 
@@ -32,23 +33,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 20),
-
-                // --- TOP NAVBAR AREA ---
                 _buildTopNavBar(context),
-
                 const SizedBox(height: 25),
-
-                // --- CATEGORY TABS ---
                 _buildCategoryTabs(),
-
                 const SizedBox(height: 20),
-
-                // --- SHUFFLE ALL BUTTON ---
                 _buildShuffleButton(musicProvider),
-
                 const SizedBox(height: 20),
-
-                // --- SONG/ITEM LIST ---
                 Expanded(child: _buildCategoryContent(musicProvider)),
               ],
             ),
@@ -58,7 +48,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  // 1. Library Title and Search Button
   Widget _buildTopNavBar(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -79,7 +68,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  // 2. Categories: Songs, Albums, Artists, Genres
   Widget _buildCategoryTabs() {
     final categories = ["Songs", "Albums", "Artists", "Genres"];
     return SingleChildScrollView(
@@ -98,7 +86,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  // 3. Round Shuffle All Button
   Widget _buildShuffleButton(MusicProvider provider) {
     return Center(
       child: ElevatedButton.icon(
@@ -124,7 +111,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  // 4. Content based on selected category
   Widget _buildCategoryContent(MusicProvider provider) {
     final songs = provider.allSongs;
 
@@ -146,12 +132,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
     return ListView.builder(
       itemCount: songs.length,
       physics: const BouncingScrollPhysics(),
-
-      // ✅ ONLY FIX APPLIED HERE
-      padding: EdgeInsets.only(bottom: provider.currentSong != null ? 160 : 0),
-
+      padding: EdgeInsets.only(bottom: provider.currentSong != null ? 160 : 20),
       itemBuilder: (context, index) {
         final song = songs[index];
+
+        // 🔧 FIX: Check for custom internet artwork path
+        final String? customPath = provider.getCustomArtwork(song.id);
+
         return ListTile(
           contentPadding: EdgeInsets.zero,
           leading: Container(
@@ -161,14 +148,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
               color: Colors.white10,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: QueryArtworkWidget(
-              id: song.id,
-              type: ArtworkType.AUDIO,
-              nullArtworkWidget: const Icon(
-                Icons.music_note,
-                color: Colors.white54,
-              ),
-            ),
+            // Logic to display Internet Art -> System Art -> Default Icon
+            child: customPath != null && File(customPath).existsSync()
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(File(customPath), fit: BoxFit.cover),
+                  )
+                : QueryArtworkWidget(
+                    id: song.id,
+                    type: ArtworkType.AUDIO,
+                    nullArtworkWidget: const Icon(
+                      Icons.music_note,
+                      color: Colors.white54,
+                    ),
+                  ),
           ),
           title: Text(
             song.title,
