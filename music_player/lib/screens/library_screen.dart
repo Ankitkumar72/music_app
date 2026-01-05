@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:on_audio_query/on_audio_query.dart'; // Needed for Artwork widget
 import '../logic/music_provider.dart';
 import '../widgets/filter_tab.dart';
 
@@ -18,34 +19,42 @@ class _LibraryScreenState extends State<LibraryScreen> {
     // context.watch ensures the UI updates when notifyListeners() is called in the provider
     final musicProvider = context.watch<MusicProvider>();
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF0A0A12),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 20),
+    // Wrap in PopScope to handle back-button logic correctly
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (didPop) return;
+        // Navigation logic can be added here if you want to switch tabs on back-press
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0A0A12),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 20),
 
-              // --- TOP NAVBAR AREA ---
-              _buildTopNavBar(context),
+                // --- TOP NAVBAR AREA ---
+                _buildTopNavBar(context),
 
-              const SizedBox(height: 25),
+                const SizedBox(height: 25),
 
-              // --- CATEGORY TABS ---
-              _buildCategoryTabs(),
+                // --- CATEGORY TABS ---
+                _buildCategoryTabs(),
 
-              const SizedBox(height: 20),
+                const SizedBox(height: 20),
 
-              // --- SHUFFLE ALL BUTTON ---
-              _buildShuffleButton(musicProvider),
+                // --- SHUFFLE ALL BUTTON ---
+                _buildShuffleButton(musicProvider),
 
-              const SizedBox(height: 20),
+                const SizedBox(height: 20),
 
-              // --- SONG/ITEM LIST ---
-              Expanded(child: _buildCategoryContent(musicProvider)),
-            ],
+                // --- SONG/ITEM LIST ---
+                Expanded(child: _buildCategoryContent(musicProvider)),
+              ],
+            ),
           ),
         ),
       ),
@@ -146,6 +155,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
     return ListView.builder(
       itemCount: songs.length,
       physics: const BouncingScrollPhysics(),
+      // 🔧 FIX: Added bottom padding to clear the Mini Player
+      padding: const EdgeInsets.only(bottom: 160),
       itemBuilder: (context, index) {
         final song = songs[index];
         return ListTile(
@@ -157,7 +168,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
               color: Colors.white10,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.music_note, color: Colors.white54),
+            // Updated to fetch actual local artwork
+            child: QueryArtworkWidget(
+              id: song.id,
+              type: ArtworkType.AUDIO,
+              nullArtworkWidget: const Icon(
+                Icons.music_note,
+                color: Colors.white54,
+              ),
+            ),
           ),
           title: Text(
             song.title, // Accesses the real title from SongModel

@@ -6,6 +6,7 @@ import 'package:on_audio_query/on_audio_query.dart';
 import '../logic/music_provider.dart';
 import '../widgets/filter_tab.dart';
 import '../widgets/playlist_card.dart';
+import '../widgets/mini_player_safe_scroll.dart';
 import 'playlist_detail_screen.dart';
 
 class PlaylistScreen extends StatefulWidget {
@@ -28,23 +29,33 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
 
     final filteredPlaylists = _filterAndSearchPlaylists(allPlaylists);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF0A0A12),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 20),
-              _buildHeader(context, allPlaylists),
-              const SizedBox(height: 30),
-              _buildTitleSection(context, musicProvider),
-              const SizedBox(height: 25),
-              _buildFilterTabs(),
-              const SizedBox(height: 25),
-              _buildPlaylistGrid(filteredPlaylists, musicProvider),
-            ],
+    // 🔧 FIX: Wrap in PopScope to prevent back button from closing the app
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        // Navigation logic can be added here if you wish to switch tabs
+      },
+      child: Scaffold(
+        extendBody: true, // ✅ Keeping your required fix
+        backgroundColor: const Color(0xFF0A0A12),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 20),
+                _buildHeader(context, allPlaylists),
+                const SizedBox(height: 30),
+                _buildTitleSection(context, musicProvider),
+                const SizedBox(height: 25),
+                _buildFilterTabs(),
+                const SizedBox(height: 25),
+
+                _buildPlaylistGrid(filteredPlaylists, musicProvider),
+              ],
+            ),
           ),
         ),
       ),
@@ -185,31 +196,34 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     if (filtered.isEmpty) return _buildEmptyState();
 
     return Expanded(
-      child: GridView.builder(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.only(bottom: 100),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 15,
-          mainAxisSpacing: 20,
-          childAspectRatio: 0.8,
-        ),
-        itemCount: filtered.length,
-        itemBuilder: (context, index) {
-          final name = filtered.keys.elementAt(index);
-          final count = filtered[name]?.length ?? 0;
-          final isLiked = name == "Liked";
+      child: MiniPlayerSafeScroll(
+        child: GridView.builder(
+          physics: const BouncingScrollPhysics(),
+          // 🔧 FIX: Added padding to ensure last row is visible
+          padding: const EdgeInsets.only(bottom: 160),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 15,
+            mainAxisSpacing: 20,
+            childAspectRatio: 0.8,
+          ),
+          itemCount: filtered.length,
+          itemBuilder: (context, index) {
+            final name = filtered.keys.elementAt(index);
+            final count = filtered[name]?.length ?? 0;
+            final isLiked = name == "Liked";
 
-          return PlaylistCard(
-            name: name,
-            songCount: count,
-            isLiked: isLiked,
-            gradientColors: _getGradientForIndex(index, isLiked),
-            iconType: _getImageForIndex(index, isLiked),
-            onTap: () => _navigateToPlaylistDetail(context, name, provider),
-            onLongPress: () => _showPlaylistOptions(context, name, provider),
-          );
-        },
+            return PlaylistCard(
+              name: name,
+              songCount: count,
+              isLiked: isLiked,
+              gradientColors: _getGradientForIndex(index, isLiked),
+              iconType: _getImageForIndex(index, isLiked),
+              onTap: () => _navigateToPlaylistDetail(context, name, provider),
+              onLongPress: () => _showPlaylistOptions(context, name, provider),
+            );
+          },
+        ),
       ),
     );
   }
@@ -225,7 +239,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     );
   }
 
-  // ───────────────────────── CREATE PLAYLIST (FIXED) ─────────────────────────
+  // ───────────────────────── CREATE PLAYLIST ─────────────────────────
 
   void _showCreatePlaylistDialog(BuildContext context, MusicProvider provider) {
     final TextEditingController controller = TextEditingController();

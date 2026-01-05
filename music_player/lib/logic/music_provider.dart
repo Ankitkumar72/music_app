@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:hive/hive.dart';
+
 import 'models/song_data.dart';
 
 class MusicProvider extends ChangeNotifier {
@@ -16,8 +17,8 @@ class MusicProvider extends ChangeNotifier {
 
   // ================= SYNC DATA =================
   Map<int, int> _playCounts = {}; // songId : count
-  List<int> _recentIds = []; // List of recently played song IDs
-  String _activeCategory = "✨ For You"; //
+  List<int> _recentIds = []; // recently played song IDs
+  String _activeCategory = "✨ For You";
 
   // ================= STATE =================
   int _currentIndex = -1;
@@ -28,7 +29,7 @@ class MusicProvider extends ChangeNotifier {
 
   // ================= HIVE =================
   late Box<PlaylistData> _playlistBox;
-  late Box _statsBox; // Box for play counts and recents
+  late Box _statsBox;
   bool _isHiveReady = false;
 
   // ================= GETTERS =================
@@ -50,16 +51,14 @@ class MusicProvider extends ChangeNotifier {
       ? _allSongs[_currentIndex]
       : null;
 
-  // --- HOME SCREEN SYNC LOGIC ---
-
+  // ================= HOME LOGIC =================
   // 1. Daily Mix: Songs played 3 or more times
-  List<SongModel> get dailyMixSongs {
-    return _songs.where((s) => (_playCounts[s.id] ?? 0) >= 3).toList();
-  }
+  List<SongModel> get dailyMixSongs =>
+      _songs.where((s) => (_playCounts[s.id] ?? 0) >= 3).toList();
 
   // 2. Discovery: Returns 10 random songs from the library
   List<SongModel> get discoverySongs {
-    List<SongModel> shuffled = List.from(_songs)..shuffle();
+    final shuffled = List<SongModel>.from(_songs)..shuffle();
     return shuffled.take(10).toList();
   }
 
@@ -70,9 +69,7 @@ class MusicProvider extends ChangeNotifier {
       try {
         result.add(_songs.firstWhere((s) => s.id == id));
         if (result.length >= 10) break;
-      } catch (e) {
-        // Song not found, skip it
-      }
+      } catch (_) {}
     }
     return result;
   }
@@ -81,17 +78,26 @@ class MusicProvider extends ChangeNotifier {
   MusicProvider() {
     _initHive();
 
-    // Listen to playback state
+    // PLAY / PAUSE STATE
     _audioPlayer.playingStream.listen((playing) {
       _isPlaying = playing;
       notifyListeners();
     });
 
-    // Listen to index changes
+    // TRACK CHANGE
     _audioPlayer.currentIndexStream.listen((index) {
       if (index != null && _currentIndex != index) {
         _currentIndex = index;
-        _handleSongChange(index); // Tracks history
+        _handleSongChange(index);
+        notifyListeners();
+      }
+    });
+
+    // HANDLE PLAYBACK COMPLETION
+    _audioPlayer.processingStateStream.listen((state) {
+      if (state == ProcessingState.completed) {
+        _currentIndex = -1;
+        _isPlaying = false;
         notifyListeners();
       }
     });
@@ -101,18 +107,15 @@ class MusicProvider extends ChangeNotifier {
   Future<void> _initHive() async {
     try {
       _playlistBox = await Hive.openBox<PlaylistData>('playlists');
-      _statsBox = await Hive.openBox('stats'); // Box for history
+      _statsBox = await Hive.openBox('stats');
       _isHiveReady = true;
 
-      // Load stats from persistence
       _playCounts = Map<int, int>.from(
         _statsBox.get('playCounts', defaultValue: {}),
       );
       _recentIds = List<int>.from(_statsBox.get('recentIds', defaultValue: []));
 
-      if (_songs.isNotEmpty) {
-        _syncWithHive();
-      }
+      if (_songs.isNotEmpty) _syncWithHive();
     } catch (e) {
       debugPrint("Hive init error: $e");
     }
@@ -136,24 +139,27 @@ class MusicProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Handles updating stats when a song is played
+  // SAFE INDEX VALIDATION
+  void _validateCurrentIndex() {
+    if (_currentIndex < 0 || _currentIndex >= _allSongs.length) {
+      _currentIndex = -1;
+    }
+  }
+
+  // ================= STATS =================
   void _handleSongChange(int index) {
     if (index < 0 || index >= _allSongs.length) return;
+
     final song = _allSongs[index];
 
-    // Update Play Count
     _playCounts[song.id] = (_playCounts[song.id] ?? 0) + 1;
 
-    // Update Recently Played (move to front)
     _recentIds.remove(song.id);
     _recentIds.insert(0, song.id);
     if (_recentIds.length > 20) _recentIds.removeLast();
 
-    // Save to Hive
     _statsBox.put('playCounts', _playCounts);
     _statsBox.put('recentIds', _recentIds);
-
-    notifyListeners();
   }
 
   void setActiveCategory(String category) {
@@ -180,11 +186,14 @@ class MusicProvider extends ChangeNotifier {
           uriType: UriType.EXTERNAL,
         );
 
+        final wasPlaying = _currentIndex >= 0;
+
         _allSongs = List.from(_songs);
 
-        if (_isHiveReady) {
-          _syncWithHive();
-        }
+        // PREVENT MINI PLAYER GLITCH ON REFRESH
+        if (wasPlaying) _validateCurrentIndex();
+
+        if (_isHiveReady) _syncWithHive();
       }
     } catch (e) {
       debugPrint("Error fetching songs: $e");
@@ -194,20 +203,17 @@ class MusicProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ================= PLAYBACK & QUEUE =================
-
-  ConcatenatingAudioSource _createSequence(List<SongModel> songList) {
+  // ================= PLAYBACK =================
+  ConcatenatingAudioSource _createSequence(List<SongModel> list) {
     return ConcatenatingAudioSource(
-      children: songList
-          .map((song) => AudioSource.uri(Uri.parse(song.uri!)))
-          .toList(),
+      children: list.map((s) => AudioSource.uri(Uri.parse(s.uri!))).toList(),
     );
   }
 
   Future<void> playSong(int index, {List<SongModel>? customList}) async {
-    // If a specific list is passed, use it as the queue
     if (customList != null) {
       _allSongs = customList;
+      _validateCurrentIndex();
     }
 
     if (index < 0 || index >= _allSongs.length) return;
@@ -227,20 +233,23 @@ class MusicProvider extends ChangeNotifier {
     }
   }
 
-  // RESTORED: For Library Screen
   void shuffleAndPlay() {
     if (_songs.isEmpty) return;
     _allSongs = List.from(_songs)..shuffle();
+    _validateCurrentIndex();
     playSong(0);
-    notifyListeners();
   }
 
   void togglePlay() {
     _audioPlayer.playing ? _audioPlayer.pause() : _audioPlayer.play();
   }
 
-  // ================= PLAYLISTS =================
+  void playNext() => _audioPlayer.hasNext ? _audioPlayer.seekToNext() : null;
 
+  void playPrevious() =>
+      _audioPlayer.hasPrevious ? _audioPlayer.seekToPrevious() : null;
+
+  // ================= PLAYLISTS =================
   bool isLiked(SongModel song) => _likedSongs.any((s) => s.id == song.id);
 
   void toggleLike(SongModel song) {
@@ -264,7 +273,6 @@ class MusicProvider extends ChangeNotifier {
     }
   }
 
-  // RESTORED: For Playlist Screen
   void deletePlaylist(String name) {
     if (name == "Liked") return;
     _playlists.remove(name);
@@ -276,9 +284,7 @@ class MusicProvider extends ChangeNotifier {
     if (_playlists.containsKey(name) &&
         !_playlists[name]!.any((s) => s.id == song.id)) {
       _playlists[name]!.add(song);
-      if (name == "Liked" && !isLiked(song)) {
-        _likedSongs.add(song);
-      }
+      if (name == "Liked" && !isLiked(song)) _likedSongs.add(song);
       _savePlaylist(name);
       notifyListeners();
     }
@@ -290,21 +296,13 @@ class MusicProvider extends ChangeNotifier {
     _playlistBox.put(name, PlaylistData(name: name, songIds: songIds));
   }
 
-  // ================= CONTROLS =================
-
-  void playNext() => _audioPlayer.hasNext ? _audioPlayer.seekToNext() : null;
-
-  void playPrevious() =>
-      _audioPlayer.hasPrevious ? _audioPlayer.seekToPrevious() : null;
-
-  // RESTORED: For Now Playing Screen
+  // ================= PLAYER MODES =================
   void toggleShuffle() {
     _isShuffleModeEnabled = !_isShuffleModeEnabled;
     _audioPlayer.setShuffleModeEnabled(_isShuffleModeEnabled);
     notifyListeners();
   }
 
-  // RESTORED: For Now Playing Screen
   void toggleRepeat() {
     _loopMode = _loopMode == LoopMode.off
         ? LoopMode.all
