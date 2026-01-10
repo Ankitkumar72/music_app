@@ -1,4 +1,4 @@
-// ignore_for_file: curly_braces_in_flow_control_structures, unused_field, prefer_final_fields
+// ignore_for_file: curly_braces_in_flow_control_structures, unused_field, prefer_final_fields, deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
