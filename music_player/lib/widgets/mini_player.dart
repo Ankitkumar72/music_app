@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
+
 import '../logic/music_provider.dart';
 import '../screens/now_playing_screen.dart';
 
@@ -93,10 +94,9 @@ class MiniPlayer extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    (currentSong.artist == null ||
-                            currentSong.artist == "<unknown>")
+                    (currentSong.artist == "<unknown>")
                         ? "Local file"
-                        : currentSong.artist!,
+                        : currentSong.artist,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontSize: 12, color: Colors.grey),

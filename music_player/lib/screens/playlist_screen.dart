@@ -1,8 +1,8 @@
 // ignore_for_file: curly_braces_in_flow_control_structures, unused_field, prefer_final_fields
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:on_audio_query/on_audio_query.dart';
 
+import '../logic/models/song_data.dart';
 import '../logic/music_provider.dart';
 import '../widgets/filter_tab.dart';
 import '../widgets/playlist_card.dart';
@@ -62,10 +62,10 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
 
   // ───────────────────────────────── SEARCH LOGIC ─────────────────────────────────
 
-  Map<String, List<SongModel>> _filterAndSearchPlaylists(
-    Map<String, List<SongModel>> playlists,
+  Map<String, List<SongData>> _filterAndSearchPlaylists(
+    Map<String, List<SongData>> playlists,
   ) {
-    Map<String, List<SongModel>> categoryFiltered;
+    Map<String, List<SongData>> categoryFiltered;
 
     if (_selectedFilter == "Favorites") {
       categoryFiltered = {"Liked": playlists["Liked"] ?? []};
@@ -80,7 +80,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     if (_searchQuery.isEmpty) return categoryFiltered;
 
     final query = _searchQuery.toLowerCase();
-    final Map<String, List<SongModel>> results = {};
+    final Map<String, List<SongData>> results = {};
 
     for (final entry in categoryFiltered.entries) {
       final playlistName = entry.key.toLowerCase();
@@ -90,7 +90,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
       final songMatch = songs.any(
         (song) =>
             song.title.toLowerCase().contains(query) ||
-            (song.artist?.toLowerCase().contains(query) ?? false),
+            (song.artist.toLowerCase().contains(query)),
       );
 
       if (nameMatch || songMatch) {
@@ -104,7 +104,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
 
   Widget _buildHeader(
     BuildContext context,
-    Map<String, List<SongModel>> allPlaylists,
+    Map<String, List<SongData>> allPlaylists,
   ) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -188,7 +188,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   }
 
   Widget _buildPlaylistGrid(
-    Map<String, List<SongModel>> filtered,
+    Map<String, List<SongData>> filtered,
     MusicProvider provider,
   ) {
     if (filtered.isEmpty) return _buildEmptyState();

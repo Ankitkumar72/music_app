@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:on_audio_query/on_audio_query.dart';
+
+import '../logic/models/song_data.dart';
 
 import '../logic/music_provider.dart';
 import '../widgets/mini_player_safe_scroll.dart';
 
 class PlaylistDetailScreen extends StatelessWidget {
   final String playlistName;
-  final List<SongModel> songs;
+  final List<SongData> songs;
 
   const PlaylistDetailScreen({
     super.key,
@@ -53,7 +54,7 @@ class PlaylistDetailScreen extends StatelessWidget {
                       style: const TextStyle(color: Colors.white),
                     ),
                     subtitle: Text(
-                      song.artist ?? "Unknown Artist",
+                      song.artist,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: Colors.white54),

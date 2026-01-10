@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:provider/provider.dart';
+import '../logic/models/song_data.dart';
 import '../logic/music_provider.dart';
 
 class MixDetailScreen extends StatelessWidget {
   final String title;
-  final List<SongModel> songs;
+  final List<SongData> songs;
   final Color themeColor;
 
   const MixDetailScreen({
@@ -97,7 +98,7 @@ class MixDetailScreen extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 subtitle: Text(
-                  song.artist ?? "Unknown Artist",
+                  song.artist,
                   style: const TextStyle(color: Colors.grey),
                 ),
                 onTap: () {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:on_audio_query/on_audio_query.dart';
+import '../logic/models/song_data.dart';
 import '../logic/music_provider.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -82,8 +83,8 @@ class HomeScreen extends StatelessWidget {
                     "Daily Mix 1",
                     musicProvider.dailyMixSongs.isEmpty
                         ? "Play more to build your mix"
-                        : musicProvider.dailyMixSongs
-                              .map((s) => s.artist ?? "Unknown")
+                            : musicProvider.dailyMixSongs
+                                  .map((s) => s.artist)
                               .toSet()
                               .take(3)
                               .join(", "),
@@ -200,7 +201,7 @@ class HomeScreen extends StatelessWidget {
   Widget _buildSectionHeader(
     BuildContext context,
     String title,
-    List<SongModel> songList,
+    List<SongData> songList,
     Color theme,
   ) {
     return SliverPadding(
@@ -245,7 +246,7 @@ class HomeScreen extends StatelessWidget {
     String title,
     String subtitle,
     Color color,
-    List<SongModel> songList,
+    List<SongData> songList,
   ) {
     return GestureDetector(
       onTap: () => Navigator.push(
@@ -333,7 +334,7 @@ class HomeScreen extends StatelessWidget {
 // --- Dynamic Detail Screen Class ---
 class MixDetailScreen extends StatelessWidget {
   final String title;
-  final List<SongModel> songs;
+  final List<SongData> songs;
   final Color themeColor;
 
   const MixDetailScreen({
@@ -386,7 +387,7 @@ class MixDetailScreen extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 subtitle: Text(
-                  song.artist ?? "Unknown",
+                  song.artist,
                   style: const TextStyle(color: Colors.grey),
                 ),
                 onTap: () => context.read<MusicProvider>().playSong(

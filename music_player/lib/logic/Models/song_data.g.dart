@@ -20,19 +20,25 @@ class SongDataAdapter extends TypeAdapter<SongData> {
       id: fields[0] as int,
       title: fields[1] as String,
       data: fields[2] as String,
+      artist: fields[3] as String,
+      albumArtUrl: fields[4] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, SongData obj) {
     writer
-      ..writeByte(3)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
       ..write(obj.title)
       ..writeByte(2)
-      ..write(obj.data);
+      ..write(obj.data)
+      ..writeByte(3)
+      ..write(obj.artist)
+      ..writeByte(4)
+      ..write(obj.albumArtUrl);
   }
 
   @override

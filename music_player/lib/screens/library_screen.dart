@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:on_audio_query/on_audio_query.dart';
+
 import '../logic/music_provider.dart';
 import '../widgets/filter_tab.dart';
 
@@ -173,7 +174,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             overflow: TextOverflow.ellipsis,
           ),
           subtitle: Text(
-            song.artist ?? "Unknown Artist",
+            song.artist,
             style: const TextStyle(color: Colors.white54, fontSize: 12),
           ),
           trailing: const Icon(Icons.more_horiz, color: Colors.white54),

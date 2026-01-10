@@ -15,10 +15,10 @@ class MusicProvider extends ChangeNotifier {
   final AudioPlayer _audioPlayer = AudioPlayer();
 
   // ================= SONG LISTS =================
-  List<SongModel> _songs = [];
-  List<SongModel> _allSongs = [];
-  final List<SongModel> _likedSongs = [];
-  final Map<String, List<SongModel>> _playlists = {"Liked": []};
+  List<SongData> _songs = [];
+  List<SongData> _allSongs = [];
+  final List<SongData> _likedSongs = [];
+  final Map<String, List<SongData>> _playlists = {"Liked": []};
 
   // ================= SYNC DATA =================
   Map<int, int> _playCounts = {};
@@ -42,10 +42,10 @@ class MusicProvider extends ChangeNotifier {
   bool _isHiveReady = false;
 
   // ================= GETTERS =================
-  List<SongModel> get songs => _songs;
-  List<SongModel> get allSongs => _allSongs;
-  List<SongModel> get likedSongs => _likedSongs;
-  Map<String, List<SongModel>> get allPlaylists => _playlists;
+  List<SongData> get songs => _songs;
+  List<SongData> get allSongs => _allSongs;
+  List<SongData> get likedSongs => _likedSongs;
+  Map<String, List<SongData>> get allPlaylists => _playlists;
   List<String> get playlistNames => _playlists.keys.toList();
   String get activeCategory => _activeCategory;
 
@@ -55,7 +55,7 @@ class MusicProvider extends ChangeNotifier {
   LoopMode get loopMode => _loopMode;
   AudioPlayer get player => _audioPlayer;
 
-  SongModel? get currentSong =>
+  SongData? get currentSong =>
       (_currentIndex >= 0 && _currentIndex < _allSongs.length)
       ? _allSongs[_currentIndex]
       : null;
@@ -64,16 +64,16 @@ class MusicProvider extends ChangeNotifier {
   String? getCustomArtwork(int songId) => _artworkCache[songId];
 
   // ================= HOME LOGIC =================
-  List<SongModel> get dailyMixSongs =>
+  List<SongData> get dailyMixSongs =>
       _songs.where((s) => (_playCounts[s.id] ?? 0) >= 3).toList();
 
-  List<SongModel> get discoverySongs {
-    final shuffled = List<SongModel>.from(_songs)..shuffle();
+  List<SongData> get discoverySongs {
+    final shuffled = List<SongData>.from(_songs)..shuffle();
     return shuffled.take(10).toList();
   }
 
-  List<SongModel> get recentlyPlayed {
-    final result = <SongModel>[];
+  List<SongData> get recentlyPlayed {
+    final result = <SongData>[];
     for (final id in _recentIds) {
       try {
         result.add(_songs.firstWhere((s) => s.id == id));
@@ -150,7 +150,7 @@ class MusicProvider extends ChangeNotifier {
   }
 
   // ================= ARTWORK FETCHER (iTunes API) =================
-  Future<void> fetchInternetArtwork(SongModel song) async {
+  Future<void> fetchInternetArtwork(SongData song) async {
     // Skip if already cached
     if (_artworkCache.containsKey(song.id)) return;
 
@@ -222,23 +222,23 @@ class MusicProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      bool hasPermission = await _audioQuery.permissionsStatus();
-      if (!hasPermission) {
-        hasPermission = await _audioQuery.permissionsRequest();
-      }
+      // 1. Get raw songs from device
+      List<SongModel> queriedSongs = await _audioQuery.querySongs(
+        ignoreCase: true,
+        orderType: OrderType.ASC_OR_SMALLER,
+        sortType: SongSortType.TITLE, // Initial sort from the package
+        uriType: UriType.EXTERNAL,
+      );
 
-      if (hasPermission) {
-        _songs = await _audioQuery.querySongs(
-          ignoreCase: true,
-          orderType: OrderType.ASC_OR_SMALLER,
-          sortType: SongSortType.TITLE,
-          uriType: UriType.EXTERNAL,
-        );
-        final wasPlaying = _currentIndex >= 0;
-        _allSongs = List.from(_songs);
-        if (wasPlaying) _validateCurrentIndex();
-        if (_isHiveReady) _syncWithHive();
-      }
+      // 2. Map to SongData (This runs your MetadataParser logic)
+      _songs = queriedSongs.map((s) {
+        return SongData.fromFile(id: s.id, filePath: s.data);
+      }).toList();
+
+      // 3. FINAL SORT: Force alphabetical order by the CLEANED Title
+      _songs.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+
+      _allSongs = List.from(_songs);
     } catch (e) {
       debugPrint("Error fetching songs: $e");
     }
@@ -248,13 +248,13 @@ class MusicProvider extends ChangeNotifier {
   }
 
   // ================= PLAYBACK =================
-  ConcatenatingAudioSource _createSequence(List<SongModel> list) {
+  ConcatenatingAudioSource _createSequence(List<SongData> list) {
     return ConcatenatingAudioSource(
-      children: list.map((s) => AudioSource.uri(Uri.parse(s.uri!))).toList(),
+      children: list.map((s) => AudioSource.uri(Uri.file(s.data))).toList(),
     );
   }
 
-  Future<void> playSong(int index, {List<SongModel>? customList}) async {
+  Future<void> playSong(int index, {List<SongData>? customList}) async {
     if (customList != null) {
       _allSongs = customList;
       _validateCurrentIndex();
@@ -291,9 +291,9 @@ class MusicProvider extends ChangeNotifier {
       _audioPlayer.hasPrevious ? _audioPlayer.seekToPrevious() : null;
 
   // ================= PLAYLISTS =================
-  bool isLiked(SongModel song) => _likedSongs.any((s) => s.id == song.id);
+  bool isLiked(SongData song) => _likedSongs.any((s) => s.id == song.id);
 
-  void toggleLike(SongModel song) {
+  void toggleLike(SongData song) {
     if (isLiked(song)) {
       _likedSongs.removeWhere((s) => s.id == song.id);
       _playlists["Liked"]?.removeWhere((s) => s.id == song.id);
@@ -321,7 +321,7 @@ class MusicProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addToPlaylist(String name, SongModel song) {
+  void addToPlaylist(String name, SongData song) {
     if (_playlists.containsKey(name) &&
         !_playlists[name]!.any((s) => s.id == song.id)) {
       _playlists[name]!.add(song);

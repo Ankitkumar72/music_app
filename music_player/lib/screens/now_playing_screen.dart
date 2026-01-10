@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:just_audio/just_audio.dart';
 
+
 import '../logic/music_provider.dart';
 import '../widgets/rotating_cd.dart';
 
@@ -147,10 +148,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                         ),
                       ),
                       Text(
-                        (currentSong.artist == null ||
-                                currentSong.artist == "<unknown>")
+                        (currentSong.artist == "<unknown>")
                             ? "Local file"
-                            : currentSong.artist!,
+                            : currentSong.artist,
                         style: const TextStyle(
                           fontSize: 18,
                           color: Colors.grey,
