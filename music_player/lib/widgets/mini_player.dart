@@ -38,31 +38,11 @@ class _MiniPlayerState extends State<MiniPlayer> {
     if (_lastSongId == songId) return;
     _lastSongId = songId;
 
-    try {
-      // Try to extract palette from artwork
-      final imageProvider = NetworkImage(
-        Uri.parse('content://media/external/audio/albumart/$songId').toString(),
-      );
-      
-      _paletteGenerator = await PaletteGenerator.fromImageProvider(
-        imageProvider,
-        maximumColorCount: 20,
-      );
-
-      if (mounted) {
-        setState(() {
-          _backgroundColor = _paletteGenerator?.dominantColor?.color ?? 
-                            _paletteGenerator?.darkMutedColor?.color ??
-                            Colors.grey;
-        });
-      }
-    } catch (e) {
-      // Fallback to gradient-based color if palette extraction fails
-      if (mounted) {
-        setState(() {
-          _backgroundColor = _generateSongGradient(songId)[0];
-        });
-      }
+    // Use gradient-based color directly (NetworkImage with content:// doesn't work)
+    if (mounted) {
+      setState(() {
+        _backgroundColor = _generateSongGradient(songId)[0];
+      });
     }
   }
 

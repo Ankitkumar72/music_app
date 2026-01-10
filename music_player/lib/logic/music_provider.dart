@@ -18,7 +18,8 @@ class MusicProvider extends ChangeNotifier {
 
   // ================= SONG LISTS =================
   List<SongData> _songs = [];
-  List<SongData> _allSongs = [];
+  List<SongData> _allSongs = []; // Full library, never modified
+  List<SongData> _currentPlaylist = []; // Currently playing playlist
   final List<SongData> _likedSongs = [];
   final Map<String, List<SongData>> _playlists = {"Liked": []};
 
@@ -57,10 +58,21 @@ class MusicProvider extends ChangeNotifier {
   LoopMode get loopMode => _loopMode;
   AudioPlayer get player => _audioPlayer;
 
-  SongData? get currentSong =>
-      (_currentIndex >= 0 && _currentIndex < _allSongs.length)
-      ? _allSongs[_currentIndex]
-      : null;
+  SongData? get currentSong {
+    // Use current playlist if available
+    if (_currentPlaylist.isNotEmpty &&
+        _currentIndex >= 0 &&
+        _currentIndex < _currentPlaylist.length) {
+      return _currentPlaylist[_currentIndex];
+    }
+    
+    // Fallback to allSongs to ensure mini player shows
+    if (_currentIndex >= 0 && _currentIndex < _allSongs.length) {
+      return _allSongs[_currentIndex];
+    }
+    
+    return null;
+  }
 
   // Helper to check if custom artwork exists
   String? getCustomArtwork(int songId) => _artworkCache[songId];
@@ -191,15 +203,15 @@ class MusicProvider extends ChangeNotifier {
   }
 
   void _validateCurrentIndex() {
-    if (_currentIndex < 0 || _currentIndex >= _allSongs.length) {
+    if (_currentIndex < 0 || _currentIndex >= _currentPlaylist.length) {
       _currentIndex = -1;
     }
   }
 
   // ================= STATS & AUTO-FETCH ART =================
   void _handleSongChange(int index) {
-    if (index < 0 || index >= _allSongs.length) return;
-    final song = _allSongs[index];
+    if (index < 0 || index >= _currentPlaylist.length) return;
+    final song = _currentPlaylist[index];
 
     // Trigger internet artwork check when a song starts
     fetchInternetArtwork(song);
@@ -257,15 +269,13 @@ class MusicProvider extends ChangeNotifier {
   }
 
   Future<void> playSong(int index, {List<SongData>? customList}) async {
-    if (customList != null) {
-      _allSongs = customList;
-      _validateCurrentIndex();
-    }
-    if (index < 0 || index >= _allSongs.length) return;
+    // Set current playlist (from customList or use full library)
+    _currentPlaylist = customList ?? _allSongs;
+    if (index < 0 || index >= _currentPlaylist.length) return;
 
     try {
       await _audioPlayer.setAudioSource(
-        _createSequence(_allSongs),
+        _createSequence(_currentPlaylist),
         initialIndex: index,
         initialPosition: Duration.zero,
       );
@@ -279,7 +289,7 @@ class MusicProvider extends ChangeNotifier {
 
   void shuffleAndPlay() {
     if (_songs.isEmpty) return;
-    _allSongs = List.from(_songs)..shuffle();
+    _currentPlaylist = List.from(_songs)..shuffle();
     _validateCurrentIndex();
     playSong(0);
   }

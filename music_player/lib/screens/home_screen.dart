@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import '../logic/models/song_data.dart';
 import '../logic/music_provider.dart';
+import '../widgets/mini_player.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -365,71 +366,83 @@ class MixDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A12),
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 200,
-            pinned: true,
-            flexibleSpace: FlexibleSpaceBar(
-              title: Text(
-                title,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [themeColor, Colors.black],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
+      body: Stack(
+        children: [
+          CustomScrollView(
+            slivers: [
+              SliverAppBar(
+                expandedHeight: 200,
+                pinned: true,
+                flexibleSpace: FlexibleSpaceBar(
+                  title: Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  background: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [themeColor, Colors.black],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
+              SliverList(
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final song = songs[index];
+                  final provider = context.read<MusicProvider>();
+                  final String? customPath = provider.getCustomArtwork(song.id);
+                  return ListTile(
+                    leading: Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: Colors.white10,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: customPath != null && File(customPath).existsSync()
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.file(File(customPath), fit: BoxFit.cover),
+                            )
+                          : QueryArtworkWidget(
+                              id: song.id,
+                              type: ArtworkType.AUDIO,
+                              nullArtworkWidget: const Icon(
+                                Icons.music_note,
+                                color: Colors.white24,
+                              ),
+                            ),
+                    ),
+                    title: Text(
+                      song.title,
+                      style: const TextStyle(color: Colors.white),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      song.artist,
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                    onTap: () => context.read<MusicProvider>().playSong(
+                      index,
+                      customList: songs,
+                    ),
+                  );
+                }, childCount: songs.length),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 100)),
+            ],
           ),
-          SliverList(
-            delegate: SliverChildBuilderDelegate((context, index) {
-              final song = songs[index];
-              final provider = context.read<MusicProvider>();
-              final String? customPath = provider.getCustomArtwork(song.id);
-              return ListTile(
-                leading: Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: Colors.white10,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: customPath != null && File(customPath).existsSync()
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.file(File(customPath), fit: BoxFit.cover),
-                        )
-                      : QueryArtworkWidget(
-                          id: song.id,
-                          type: ArtworkType.AUDIO,
-                          nullArtworkWidget: const Icon(
-                            Icons.music_note,
-                            color: Colors.white24,
-                          ),
-                        ),
-                ),
-                title: Text(
-                  song.title,
-                  style: const TextStyle(color: Colors.white),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(
-                  song.artist,
-                  style: const TextStyle(color: Colors.grey),
-                ),
-                onTap: () => context.read<MusicProvider>().playSong(
-                  index,
-                  customList: songs,
-                ),
-              );
-            }, childCount: songs.length),
+          
+          // Mini Player at the bottom
+          const Positioned(
+            left: 10,
+            right: 10,
+            bottom: 10,
+            child: MiniPlayer(),
           ),
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
         ],
       ),
     );

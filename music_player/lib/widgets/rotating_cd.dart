@@ -124,22 +124,27 @@ class _RotatingCDState extends State<RotatingCD>
                   : _buildQueryArtwork(colors),
             ),
 
-            // CD center hole (for realistic vinyl look)
+            // CD center - filled with gradient to complete the music icon look
             Container(
               width: 40,
               height: 40,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF0B0B0B),
+                gradient: RadialGradient(
+                  colors: [
+                    colors[1].withValues(alpha: 0.8),
+                    colors[0].withValues(alpha: 0.6),
+                  ],
+                ),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.3),
+                  color: Colors.white.withValues(alpha: 0.2),
                   width: 2,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.6),
-                    blurRadius: 8,
-                    spreadRadius: 2,
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 4,
+                    spreadRadius: 1,
                   ),
                 ],
               ),
