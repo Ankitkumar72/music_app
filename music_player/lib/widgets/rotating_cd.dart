@@ -1,12 +1,19 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
+import 'dart:io';
 
 class RotatingCD extends StatefulWidget {
   final int songId;
   final bool isPlaying;
+  final String? customArtworkPath; // Add custom artwork support
 
-  const RotatingCD({super.key, required this.songId, required this.isPlaying});
+  const RotatingCD({
+    super.key,
+    required this.songId,
+    required this.isPlaying,
+    this.customArtworkPath,
+  });
 
   @override
   State<RotatingCD> createState() => _RotatingCDState();
@@ -97,29 +104,75 @@ class _RotatingCDState extends State<RotatingCD>
             ),
           ],
         ),
-        child: ClipOval(
-          child: QueryArtworkWidget(
-            id: widget.songId,
-            type: ArtworkType.AUDIO,
-            artworkWidth: 280,
-            artworkHeight: 280,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Main album artwork - prioritize custom downloaded artwork
+            ClipOval(
+              child: widget.customArtworkPath != null &&
+                      File(widget.customArtworkPath!).existsSync()
+                  ? Image.file(
+                      File(widget.customArtworkPath!),
+                      width: 280,
+                      height: 280,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        // Fallback to QueryArtworkWidget if file fails
+                        return _buildQueryArtwork(colors);
+                      },
+                    )
+                  : _buildQueryArtwork(colors),
+            ),
 
-            nullArtworkWidget: Container(
+            // CD center hole (for realistic vinyl look)
+            Container(
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [colors[0], colors[1], const Color(0xFF0B0B0B)],
-                  radius: 0.9,
+                color: const Color(0xFF0B0B0B),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  width: 2,
                 ),
-              ),
-              child: Center(
-                child: Icon(
-                  Icons.music_note,
-                  size: 80,
-                  color: Colors.white.withValues(alpha: 0.35),
-                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.6),
+                    blurRadius: 8,
+                    spreadRadius: 2,
+                  ),
+                ],
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQueryArtwork(List<Color> colors) {
+    return QueryArtworkWidget(
+      id: widget.songId,
+      type: ArtworkType.AUDIO,
+      artworkWidth: 280,
+      artworkHeight: 280,
+      artworkFit: BoxFit.cover,
+      quality: 100,
+      artworkQuality: FilterQuality.high,
+      keepOldArtwork: true,
+      nullArtworkWidget: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [colors[0], colors[1], const Color(0xFF0B0B0B)],
+            radius: 0.9,
+          ),
+        ),
+        child: Center(
+          child: Icon(
+            Icons.music_note,
+            size: 80,
+            color: Colors.white.withValues(alpha: 0.35),
           ),
         ),
       ),

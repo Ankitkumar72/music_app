@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:on_audio_query/on_audio_query.dart';
@@ -134,7 +135,11 @@ class HomeScreen extends StatelessWidget {
                             index,
                             customList: musicProvider.recentlyPlayed,
                           ),
-                          child: _buildSmallRecentCard(song.title, song.id),
+                          child: _buildSmallRecentCard(
+                            song.title,
+                            song.id,
+                            musicProvider,
+                          ),
                         );
                       },
                     ),
@@ -294,7 +299,13 @@ class HomeScreen extends StatelessWidget {
   }
 
   // --- Helper: Small Square Cards with Artwork logic ---
-  Widget _buildSmallRecentCard(String title, int songId) {
+  Widget _buildSmallRecentCard(
+    String title,
+    int songId,
+    MusicProvider provider,
+  ) {
+    final String? customPath = provider.getCustomArtwork(songId);
+
     return Container(
       width: 140,
       margin: const EdgeInsets.only(right: 16),
@@ -307,16 +318,20 @@ class HomeScreen extends StatelessWidget {
               color: Colors.white12,
               height: 140,
               width: 140,
-              child: QueryArtworkWidget(
-                id: songId,
-                type: ArtworkType.AUDIO,
-                // Fixed: Correct parameter name for modern on_audio_query versions
-                nullArtworkWidget: const Icon(
-                  Icons.music_note,
-                  color: Colors.white24,
-                  size: 50,
-                ),
-              ),
+              child: customPath != null && File(customPath).existsSync()
+                  ? Image.file(
+                      File(customPath),
+                      fit: BoxFit.cover,
+                    )
+                  : QueryArtworkWidget(
+                      id: songId,
+                      type: ArtworkType.AUDIO,
+                      nullArtworkWidget: const Icon(
+                        Icons.music_note,
+                        color: Colors.white24,
+                        size: 50,
+                      ),
+                    ),
             ),
           ),
           const SizedBox(height: 8),
@@ -372,14 +387,29 @@ class MixDetailScreen extends StatelessWidget {
           SliverList(
             delegate: SliverChildBuilderDelegate((context, index) {
               final song = songs[index];
+              final provider = context.read<MusicProvider>();
+              final String? customPath = provider.getCustomArtwork(song.id);
               return ListTile(
-                leading: QueryArtworkWidget(
-                  id: song.id,
-                  type: ArtworkType.AUDIO,
-                  nullArtworkWidget: const Icon(
-                    Icons.music_note,
-                    color: Colors.white24,
+                leading: Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.white10,
+                    borderRadius: BorderRadius.circular(8),
                   ),
+                  child: customPath != null && File(customPath).existsSync()
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.file(File(customPath), fit: BoxFit.cover),
+                        )
+                      : QueryArtworkWidget(
+                          id: song.id,
+                          type: ArtworkType.AUDIO,
+                          nullArtworkWidget: const Icon(
+                            Icons.music_note,
+                            color: Colors.white24,
+                          ),
+                        ),
                 ),
                 title: Text(
                   song.title,

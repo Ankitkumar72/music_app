@@ -127,6 +127,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
             RotatingCD(
               songId: currentSong.id,
               isPlaying: musicProvider.isPlaying,
+              customArtworkPath: musicProvider.getCustomArtwork(currentSong.id),
             ),
 
             const Spacer(),
