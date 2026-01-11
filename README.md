@@ -76,7 +76,7 @@ flutter run
 
 ---
 
-## 🏗️ Project Structure * Click here for **[Detailed Structure](https://github.com/Ankitkumar72/music_app/blob/main/Structure.md)** 
+## 🏗️ Project Structure  Click here for - **[Detailed Structure](https://github.com/Ankitkumar72/music_app/blob/main/Structure.md)** 
 
 ```text
 lib/
