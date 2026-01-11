@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../logic/Models/song_data.dart'; 
+import 'song_menu.dart';
 
 class SongTile extends StatelessWidget {
   final SongData song;
@@ -15,6 +16,7 @@ class SongTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       onTap: onTap,
+      onLongPress: () => showSongMenu(context, song),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       
       // 1. Leading: Album Art with Rounded Corners
@@ -56,9 +58,7 @@ class SongTile extends StatelessWidget {
       // 4. Trailing: Options Menu
       trailing: IconButton(
         icon: const Icon(Icons.more_vert, color: Colors.grey),
-        onPressed: () {
-          // Add logic for "Add to Playlist", "Delete", etc.
-        },
+        onPressed: () => showSongMenu(context, song),
       ),
     );
   }

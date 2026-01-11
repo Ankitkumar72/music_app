@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'screens/navigation_shell.dart';
 import 'logic/music_provider.dart';
-import 'logic/models/song_data.dart';
+import 'logic/Models/song_data.dart';
 
 void main() async {
   // 1. Initialize Flutter bindings

@@ -10,7 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
 
-import 'models/song_data.dart';
+import 'Models/song_data.dart';
 
 class MusicProvider extends ChangeNotifier {
   final OnAudioQuery _audioQuery = OnAudioQuery();
@@ -76,6 +76,61 @@ class MusicProvider extends ChangeNotifier {
 
   // Helper to check if custom artwork exists
   String? getCustomArtwork(int songId) => _artworkCache[songId];
+
+  // ================= MANUAL ARTWORK SEARCH =================
+  /// Searches iTunes API with custom query and returns multiple results
+  Future<List<Map<String, dynamic>>> searchArtwork(String query) async {
+    try {
+      final term = Uri.encodeComponent(query);
+      final url =
+          "https://itunes.apple.com/search?term=$term&entity=song&limit=12";
+
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['resultCount'] > 0) {
+          return (data['results'] as List).map((result) {
+            // Get high-res version of artwork
+            String artworkUrl = (result['artworkUrl100'] ?? '')
+                .replaceAll('100x100bb', '600x600bb');
+
+            return {
+              'artworkUrl': artworkUrl,
+              'trackName': result['trackName'] ?? 'Unknown',
+              'artistName': result['artistName'] ?? 'Unknown Artist',
+              'collectionName': result['collectionName'],
+            };
+          }).toList();
+        }
+      }
+    } catch (e) {
+      debugPrint("Artwork search error: $e");
+    }
+    return [];
+  }
+
+  /// Downloads and saves custom artwork selected by user
+  Future<void> setCustomArtwork(int songId, String artworkUrl) async {
+    try {
+      Directory dir = await getApplicationDocumentsDirectory();
+      String filePath = "${dir.path}/art_$songId.jpg";
+
+      // Download the artwork
+      await Dio().download(artworkUrl, filePath);
+
+      // Save to Hive and Cache
+      _artworkCache[songId] = filePath;
+      await _metadataBox.put(
+        songId,
+        CachedMetadata(songId: songId, localImagePath: filePath),
+      );
+      
+      notifyListeners();
+    } catch (e) {
+      debugPrint("Custom artwork save error: $e");
+      rethrow; // Re-throw so UI can show error
+    }
+  }
 
   // ================= HOME LOGIC =================
   List<SongData> get dailyMixSongs =>

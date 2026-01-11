@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../logic/models/song_data.dart';
+import '../logic/Models/song_data.dart';
 import '../logic/music_provider.dart';
 import '../widgets/filter_tab.dart';
 import '../widgets/playlist_card.dart';

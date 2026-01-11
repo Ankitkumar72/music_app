@@ -4,9 +4,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:on_audio_query/on_audio_query.dart';
-import '../logic/models/song_data.dart';
+import '../logic/Models/song_data.dart';
 import '../logic/music_provider.dart';
 import '../widgets/mini_player.dart';
+import '../widgets/song_menu.dart';
+import '../widgets/blob_background.dart';
 
 // Helper function to get time-based greeting
 String _getGreeting() {
@@ -267,7 +269,6 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // --- Helper: Large Horizontal Cards ---
   Widget _buildLargeDailyMixCard(
     BuildContext context,
     String title,
@@ -275,6 +276,12 @@ class HomeScreen extends StatelessWidget {
     Color color,
     List<SongData> songList,
   ) {
+    // Different seed for each card to create unique blob patterns
+    final seed = title == "Daily Mix 1" ? 42 : 123;
+    final secondaryColor = title == "Daily Mix 1" 
+        ? const Color(0xFF8D6E63) // Warm brown for Daily Mix
+        : const Color(0xFF607D8B); // Cool blue-grey for Discovery
+
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
@@ -286,35 +293,65 @@ class HomeScreen extends StatelessWidget {
       child: Container(
         width: 260,
         margin: const EdgeInsets.only(right: 16),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(32),
-          gradient: LinearGradient(
-            colors: [color, color.withOpacity(0.5)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+        child: BlobBackground(
+          primaryColor: color,
+          secondaryColor: secondaryColor,
+          seed: seed,
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFD700),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFFD700).withOpacity(0.4),
+                        blurRadius: 15,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.play_arrow, color: Colors.black, size: 28),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    shadows: [
+                      Shadow(
+                        blurRadius: 10,
+                        color: Colors.black38,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    shadows: [
+                      Shadow(
+                        blurRadius: 8,
+                        color: Colors.black26,
+                      ),
+                    ],
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.end,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const CircleAvatar(
-              backgroundColor: Color(0xFFFFD700),
-              child: Icon(Icons.play_arrow, color: Colors.black),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            Text(
-              subtitle,
-              style: const TextStyle(color: Colors.white70),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
         ),
       ),
     );
@@ -413,42 +450,43 @@ class MixDetailScreen extends StatelessWidget {
                   final song = songs[index];
                   final provider = context.read<MusicProvider>();
                   final String? customPath = provider.getCustomArtwork(song.id);
-                  return ListTile(
-                    leading: Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: Colors.white10,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: customPath != null && File(customPath).existsSync()
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.file(File(customPath), fit: BoxFit.cover),
-                            )
-                          : QueryArtworkWidget(
-                              id: song.id,
-                              type: ArtworkType.AUDIO,
-                              nullArtworkWidget: const Icon(
-                                Icons.music_note,
-                                color: Colors.white24,
-                              ),
-                            ),
-                    ),
-                    title: Text(
-                      song.title,
-                      style: const TextStyle(color: Colors.white),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      song.artist ?? "Unknown Artist",
-                      style: const TextStyle(color: Colors.grey),
-                    ),
-                    onTap: () => context.read<MusicProvider>().playSong(
-                          index,
-                          customList: songs,
+                    return ListTile(
+                      leading: Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: Colors.white10,
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                  );
+                        child: customPath != null && File(customPath).existsSync()
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.file(File(customPath), fit: BoxFit.cover),
+                              )
+                            : QueryArtworkWidget(
+                                id: song.id,
+                                type: ArtworkType.AUDIO,
+                                nullArtworkWidget: const Icon(
+                                  Icons.music_note,
+                                  color: Colors.white24,
+                                ),
+                              ),
+                      ),
+                      title: Text(
+                        song.title,
+                        style: const TextStyle(color: Colors.white),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        song.artist ?? "Unknown Artist",
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                      onTap: () => context.read<MusicProvider>().playSong(
+                            index,
+                            customList: songs,
+                          ),
+                      onLongPress: () => showSongMenu(context, song),
+                    );
                 }, childCount: songs.length),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 100)),

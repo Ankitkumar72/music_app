@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../logic/models/song_data.dart';
+import '../logic/Models/song_data.dart';
 
 import '../logic/music_provider.dart';
 import '../widgets/mini_player_safe_scroll.dart';
