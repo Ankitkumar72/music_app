@@ -1,4 +1,4 @@
-# Music Player App - Project Structure
+Pixy Player - Project Structure
 
 ## Overview
 A modern Flutter music player app with local file support, custom metadata parsing, online artwork fetching, and dynamic UI components.
