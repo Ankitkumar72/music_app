@@ -278,9 +278,4 @@ flutter build apk --release
 flutter build apk --split-per-abi  # Smaller APKs
 ```
 
-## Notes
 
-- **Image Format:** All custom artwork saved as JPG
-- **Artwork Quality:** Downloaded at 600x600 (high-res)
-- **Blob Seeds:** Daily Mix = 42, Discovery = 123 (consistent patterns)
-- **Color Scheme:** Warm browns for Daily Mix, cool blues for Discovery
