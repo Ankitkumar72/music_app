@@ -16,14 +16,12 @@ class MetadataParser {
     String artist = "Unknown Artist";
 
     if (segments.length >= 2) {
-      // IF THE FILE IS "Artist - SongName" (Common in downloads)
-      // We check if the first segment is short (likely artist) 
-      // and second is longer (likely title).
+      
       if (segments[1].length > segments[0].length) {
         artist = segments[0];
         title = segments[1];
       } else {
-        // IF THE FILE IS "SongName - Artist"
+        
         title = segments[0];
         artist = segments[1];
       }

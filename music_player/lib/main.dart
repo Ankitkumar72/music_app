@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:audio_service/audio_service.dart';
 import 'screens/navigation_shell.dart';
 import 'logic/music_provider.dart';
 import 'logic/Models/song_data.dart';
+import 'logic/audio_handler.dart';
 
 void main() async {
   // 1. Initialize Flutter bindings
@@ -13,7 +15,6 @@ void main() async {
   await Hive.initFlutter();
   Hive.registerAdapter(SongDataAdapter());
   Hive.registerAdapter(PlaylistDataAdapter());
-  // FIXED: Added registration for the internet artwork cache
   Hive.registerAdapter(CachedMetadataAdapter());
 
   // 3. Open required Hive boxes before Provider initialization
@@ -21,12 +22,31 @@ void main() async {
   await Hive.openBox<CachedMetadata>('metadata');
   await Hive.openBox('stats');
 
-  // 4. Run the App with MultiProvider
+  // 4. Initialize Audio Service for background playback
+  try {
+    audioHandler = await AudioService.init(
+      builder: () => AudioPlayerHandler(),
+      config: const AudioServiceConfig(
+        androidNotificationChannelId: 'com.pixy.musicplayer.channel.audio',
+        androidNotificationChannelName: 'Pixy Music',
+        androidNotificationOngoing: true,
+        androidStopForegroundOnPause: true,
+        androidNotificationIcon: 'mipmap/ic_launcher',
+        preloadArtwork: true,
+        androidShowNotificationBadge: true,
+      ),
+    );
+    debugPrint("✅ AudioService initialized successfully: $audioHandler");
+  } catch (e, stack) {
+    debugPrint("❌ Error initializing AudioService: $e");
+    debugPrint("Stack trace: $stack");
+  }
+
+  // 5. Run the App with MultiProvider
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(
-          // fetchSongs() is called immediately upon creation
           create: (_) => MusicProvider()..fetchSongs(),
         ),
       ],

@@ -5,6 +5,7 @@ import '../logic/Models/song_data.dart';
 
 import '../logic/music_provider.dart';
 import '../widgets/mini_player_safe_scroll.dart';
+import '../widgets/mini_player.dart';
 
 class PlaylistDetailScreen extends StatelessWidget {
   final String playlistName;
@@ -28,45 +29,56 @@ class PlaylistDetailScreen extends StatelessWidget {
         title: Text(playlistName, style: const TextStyle(color: Colors.white)),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: songs.isEmpty
-          ? const Center(
-              child: Text(
-                "No songs in this playlist yet",
-                style: TextStyle(color: Colors.white54),
-              ),
-            )
-          : MiniPlayerSafeScroll(
-              child: ListView.builder(
-                physics: const BouncingScrollPhysics(),
-                itemCount: songs.length,
-                itemBuilder: (context, index) {
-                  final song = songs[index];
+      body: Stack(
+        children: [
+          songs.isEmpty
+              ? const Center(
+                  child: Text(
+                    "No songs in this playlist yet",
+                    style: TextStyle(color: Colors.white54),
+                  ),
+                )
+              : MiniPlayerSafeScroll(
+                  child: ListView.builder(
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: songs.length,
+                    itemBuilder: (context, index) {
+                      final song = songs[index];
 
-                  return ListTile(
-                    leading: const Icon(
-                      Icons.music_note,
-                      color: Colors.white54,
-                    ),
-                    title: Text(
-                      song.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                    subtitle: Text(
-                      song.artist,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white54),
-                    ),
-                    onTap: () {
-                      // 🎵 PLAY FROM THIS PLAYLIST
-                      musicProvider.playSong(index, customList: songs);
+                      return ListTile(
+                        leading: const Icon(
+                          Icons.music_note,
+                          color: Colors.white54,
+                        ),
+                        title: Text(
+                          song.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        subtitle: Text(
+                          song.artist,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.white54),
+                        ),
+                        onTap: () {
+                          // 🎵 PLAY FROM THIS PLAYLIST
+                          musicProvider.playSong(index, customList: songs);
+                        },
+                      );
                     },
-                  );
-                },
-              ),
-            ),
+                  ),
+                ),
+          // Mini Player
+          const Positioned(
+            left: 10,
+            right: 10,
+            bottom: 10,
+            child: MiniPlayer(),
+          ),
+        ],
+      ),
     );
   }
 }

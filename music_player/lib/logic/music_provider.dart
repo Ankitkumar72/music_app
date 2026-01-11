@@ -5,16 +5,23 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:audio_service/audio_service.dart';
 import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
 
 import 'Models/song_data.dart';
+import 'audio_handler.dart';
 
 class MusicProvider extends ChangeNotifier {
   final OnAudioQuery _audioQuery = OnAudioQuery();
-  final AudioPlayer _audioPlayer = AudioPlayer();
+
+  // Use the global audio handler's player if available
+  AudioPlayer get _audioPlayer => audioHandler?.player ?? _fallbackPlayer;
+  
+  // Fallback player for when audio_service isn't initialized
+  final AudioPlayer _fallbackPlayer = AudioPlayer();
 
   // ================= SONG LISTS =================
   List<SongData> _songs = [];
@@ -27,6 +34,7 @@ class MusicProvider extends ChangeNotifier {
   Map<int, int> _playCounts = {};
   List<int> _recentIds = [];
   String _activeCategory = "✨ For You";
+  List<SongData> _searchResults = [];
 
   // Cache for internet artwork paths
   final Map<int, String?> _artworkCache = {};
@@ -40,7 +48,7 @@ class MusicProvider extends ChangeNotifier {
 
   // ================= HIVE =================
   late Box<PlaylistData> _playlistBox;
-  late Box<CachedMetadata> _metadataBox; // New box for artwork paths
+  late Box<CachedMetadata> _metadataBox;
   late Box _statsBox;
   bool _isHiveReady = false;
 
@@ -51,6 +59,7 @@ class MusicProvider extends ChangeNotifier {
   Map<String, List<SongData>> get allPlaylists => _playlists;
   List<String> get playlistNames => _playlists.keys.toList();
   String get activeCategory => _activeCategory;
+  List<SongData> get searchResults => _searchResults;
 
   bool get isLoading => _isLoading;
   bool get isPlaying => _isPlaying;
@@ -59,86 +68,84 @@ class MusicProvider extends ChangeNotifier {
   AudioPlayer get player => _audioPlayer;
 
   SongData? get currentSong {
-    // Use current playlist if available
     if (_currentPlaylist.isNotEmpty &&
         _currentIndex >= 0 &&
         _currentIndex < _currentPlaylist.length) {
       return _currentPlaylist[_currentIndex];
     }
-    
-    // Fallback to allSongs to ensure mini player shows
     if (_currentIndex >= 0 && _currentIndex < _allSongs.length) {
       return _allSongs[_currentIndex];
     }
-    
     return null;
   }
 
-  // Helper to check if custom artwork exists
   String? getCustomArtwork(int songId) => _artworkCache[songId];
 
   // ================= MANUAL ARTWORK SEARCH =================
-  /// Searches iTunes API with custom query and returns multiple results
   Future<List<Map<String, dynamic>>> searchArtwork(String query) async {
     try {
-      final term = Uri.encodeComponent(query);
+      final cleanQuery = Uri.encodeComponent(query);
       final url =
-          "https://itunes.apple.com/search?term=$term&entity=song&limit=12";
+          'https://itunes.apple.com/search?term=$cleanQuery&media=music&limit=10';
+      debugPrint("Searching iTunes API: $url");
 
       final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['resultCount'] > 0) {
-          return (data['results'] as List).map((result) {
-            // Get high-res version of artwork
-            String artworkUrl = (result['artworkUrl100'] ?? '')
-                .replaceAll('100x100bb', '600x600bb');
-
-            return {
-              'artworkUrl': artworkUrl,
-              'trackName': result['trackName'] ?? 'Unknown',
-              'artistName': result['artistName'] ?? 'Unknown Artist',
-              'collectionName': result['collectionName'],
-            };
-          }).toList();
-        }
+        final Map<String, dynamic> data = json.decode(response.body);
+        return List<Map<String, dynamic>>.from(data['results'] ?? []);
+      } else {
+        debugPrint("API error: ${response.statusCode}");
+        return [];
       }
     } catch (e) {
-      debugPrint("Artwork search error: $e");
+      debugPrint("Error searching artwork: $e");
+      return [];
     }
-    return [];
   }
 
-  /// Downloads and saves custom artwork selected by user
-  Future<void> setCustomArtwork(int songId, String artworkUrl) async {
+  Future<void> applyChosenArtwork(
+      int songId, Map<String, dynamic> artworkData) async {
     try {
+      String? imageUrl = artworkData['artworkUrl100']?.toString().replaceAll(
+            '100x100bb',
+            '600x600bb',
+          );
+
+      if (imageUrl == null || imageUrl.isEmpty) {
+        debugPrint("No valid artwork URL found for this result");
+        return;
+      }
+
+      debugPrint("Downloading chosen art from: $imageUrl");
+
       Directory dir = await getApplicationDocumentsDirectory();
       String filePath = "${dir.path}/art_$songId.jpg";
 
-      // Download the artwork
-      await Dio().download(artworkUrl, filePath);
+      await Dio().download(imageUrl, filePath);
 
-      // Save to Hive and Cache
       _artworkCache[songId] = filePath;
       await _metadataBox.put(
         songId,
         CachedMetadata(songId: songId, localImagePath: filePath),
       );
-      
+
       notifyListeners();
+      debugPrint("✅ Successfully applied artwork from manual search!");
     } catch (e) {
-      debugPrint("Custom artwork save error: $e");
-      rethrow; // Re-throw so UI can show error
+      debugPrint("Error applying chosen artwork: $e");
     }
   }
 
-  // ================= HOME LOGIC =================
-  List<SongData> get dailyMixSongs =>
-      _songs.where((s) => (_playCounts[s.id] ?? 0) >= 3).toList();
+  List<SongData> get dailyMixSongs {
+    return _songs
+        .where((s) => (_playCounts[s.id] ?? 0) >= 3)
+        .take(10)
+        .toList();
+  }
 
   List<SongData> get discoverySongs {
-    final shuffled = List<SongData>.from(_songs)..shuffle();
-    return shuffled.take(10).toList();
+    final shuffled = List<SongData>.from(_allSongs)..shuffle();
+    return shuffled.take(20).toList();
   }
 
   List<SongData> get recentlyPlayed {
@@ -155,7 +162,10 @@ class MusicProvider extends ChangeNotifier {
   // ================= CONSTRUCTOR =================
   MusicProvider() {
     _initHive();
+    _setupPlayerListeners();
+  }
 
+  void _setupPlayerListeners() {
     _audioPlayer.playingStream.listen((playing) {
       _isPlaying = playing;
       notifyListeners();
@@ -165,6 +175,7 @@ class MusicProvider extends ChangeNotifier {
       if (index != null && _currentIndex != index) {
         _currentIndex = index;
         _handleSongChange(index);
+        _updateNotificationMetadata();
         notifyListeners();
       }
     });
@@ -178,27 +189,44 @@ class MusicProvider extends ChangeNotifier {
     });
   }
 
+  void _updateNotificationMetadata() {
+    if (currentSong == null || audioHandler == null) return;
+    
+    final song = currentSong!;
+    final artworkPath = getCustomArtwork(song.id);
+    
+    final mediaItem = MediaItem(
+      id: song.data,
+      title: song.title,
+      artist: song.artist,
+      artUri: artworkPath != null ? Uri.file(artworkPath) : null,
+      duration: _audioPlayer.duration,
+    );
+    
+    audioHandler!.updateMediaItem(mediaItem);
+  }
+
   // ================= HIVE INIT =================
   Future<void> _initHive() async {
     try {
       _playlistBox = await Hive.openBox<PlaylistData>('playlists');
-      _metadataBox = await Hive.openBox<CachedMetadata>('metadata'); //
-      _statsBox = await Hive.openBox('stats');
+      _metadataBox = await Hive.openBox<CachedMetadata>('metadata');
+      _statsBox = await Hive.openBox('music_stats');
       _isHiveReady = true;
 
-      _playCounts = Map<int, int>.from(
-        _statsBox.get('playCounts', defaultValue: {}),
-      );
-      _recentIds = List<int>.from(_statsBox.get('recentIds', defaultValue: []));
-
-      // Load cached metadata into memory
-      for (var meta in _metadataBox.values) {
-        _artworkCache[meta.songId] = meta.localImagePath;
+      for (var entry in _metadataBox.values) {
+        _artworkCache[entry.songId] = entry.localImagePath;
       }
 
-      if (_songs.isNotEmpty) _syncWithHive();
+      _playCounts = Map<int, int>.from(_statsBox.get('playCounts', defaultValue: {}));
+      _recentIds = List<int>.from(_statsBox.get('recentIds', defaultValue: []));
+
+      debugPrint("✅ Hive ready | Artwork: ${_artworkCache.length} | Stats loaded");
+      fetchSongs();
     } catch (e) {
-      debugPrint("Hive init error: $e");
+      debugPrint("Error initializing Hive: $e");
+      _isHiveReady = false;
+      fetchSongs();
     }
   }
 
@@ -207,6 +235,7 @@ class MusicProvider extends ChangeNotifier {
     for (final data in _playlistBox.values) {
       final matchedSongs = _songs
           .where((s) => data.songIds.contains(s.id))
+          .where((s) => File(s.data).existsSync())
           .toList();
       _playlists[data.name] = matchedSongs;
       if (data.name == "Liked") {
@@ -218,71 +247,25 @@ class MusicProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ================= ARTWORK FETCHER (iTunes API) =================
-  Future<void> fetchInternetArtwork(SongData song) async {
-    // Skip if already cached
-    if (_artworkCache.containsKey(song.id)) return;
+  void _handleSongChange(int newIndex) {
+    final id = _currentPlaylist.isNotEmpty && newIndex < _currentPlaylist.length
+        ? _currentPlaylist[newIndex].id
+        : _allSongs.isNotEmpty && newIndex < _allSongs.length
+        ? _allSongs[newIndex].id
+        : null;
 
-    try {
-      final term = Uri.encodeComponent("${song.title} ${song.artist}");
-      final url =
-          "https://itunes.apple.com/search?term=$term&entity=song&limit=1";
+    if (id == null) return;
 
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['resultCount'] > 0) {
-          // Get high-res version
-          String imageUrl = data['results'][0]['artworkUrl100'].replaceAll(
-            '100x100bb',
-            '600x600bb',
-          );
+    _playCounts[id] = (_playCounts[id] ?? 0) + 1;
 
-          Directory dir = await getApplicationDocumentsDirectory();
-          String filePath = "${dir.path}/art_${song.id}.jpg";
-
-          await Dio().download(imageUrl, filePath);
-
-          // Save to Hive and Cache
-          _artworkCache[song.id] = filePath;
-          await _metadataBox.put(
-            song.id,
-            CachedMetadata(songId: song.id, localImagePath: filePath),
-          );
-          notifyListeners();
-        }
-      }
-    } catch (e) {
-      debugPrint("Metadata fetch error: $e");
+    _recentIds.remove(id);
+    _recentIds.insert(0, id);
+    if (_recentIds.length > 50) {
+      _recentIds.removeRange(50, _recentIds.length);
     }
-  }
-
-  void _validateCurrentIndex() {
-    if (_currentIndex < 0 || _currentIndex >= _currentPlaylist.length) {
-      _currentIndex = -1;
-    }
-  }
-
-  // ================= STATS & AUTO-FETCH ART =================
-  void _handleSongChange(int index) {
-    if (index < 0 || index >= _currentPlaylist.length) return;
-    final song = _currentPlaylist[index];
-
-    // Trigger internet artwork check when a song starts
-    fetchInternetArtwork(song);
-
-    _playCounts[song.id] = (_playCounts[song.id] ?? 0) + 1;
-    _recentIds.remove(song.id);
-    _recentIds.insert(0, song.id);
-    if (_recentIds.length > 20) _recentIds.removeLast();
 
     _statsBox.put('playCounts', _playCounts);
     _statsBox.put('recentIds', _recentIds);
-  }
-
-  void setActiveCategory(String category) {
-    _activeCategory = category;
-    notifyListeners();
   }
 
   // ================= FETCH SONGS =================
@@ -291,20 +274,18 @@ class MusicProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // 1. Get raw songs from device
       List<SongModel> queriedSongs = await _audioQuery.querySongs(
         ignoreCase: true,
         orderType: OrderType.ASC_OR_SMALLER,
-        sortType: SongSortType.TITLE, // Initial sort from the package
+        sortType: SongSortType.TITLE,
         uriType: UriType.EXTERNAL,
       );
 
-      // 2. Map to SongData (This runs your MetadataParser logic)
       _songs = queriedSongs.map((s) {
         return SongData.fromFile(id: s.id, filePath: s.data);
       }).toList();
 
-      // 3. FINAL SORT: Force alphabetical order by the CLEANED Title
+      _songs = _songs.where((s) => File(s.data).existsSync()).toList();
       _songs.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
 
       _allSongs = List.from(_songs);
@@ -312,102 +293,166 @@ class MusicProvider extends ChangeNotifier {
       debugPrint("Error fetching songs: $e");
     }
 
+    _syncWithHive();
+
     _isLoading = false;
     notifyListeners();
   }
 
-  // ================= PLAYBACK =================
-  ConcatenatingAudioSource _createSequence(List<SongData> list) {
-    return ConcatenatingAudioSource(
-      children: list.map((s) => AudioSource.uri(Uri.file(s.data))).toList(),
-    );
-  }
-
-  Future<void> playSong(int index, {List<SongData>? customList}) async {
-    // Set current playlist (from customList or use full library)
-    _currentPlaylist = customList ?? _allSongs;
-    if (index < 0 || index >= _currentPlaylist.length) return;
-
-    try {
-      await _audioPlayer.setAudioSource(
-        _createSequence(_currentPlaylist),
-        initialIndex: index,
-        initialPosition: Duration.zero,
-      );
-      _currentIndex = index;
-      _audioPlayer.play();
-      notifyListeners();
-    } catch (e) {
-      debugPrint("Playback error: $e");
-    }
-  }
-
-  void shuffleAndPlay() {
-    if (_songs.isEmpty) return;
-    _currentPlaylist = List.from(_songs)..shuffle();
-    _validateCurrentIndex();
-    playSong(0);
-  }
-
-  void togglePlay() {
-    _audioPlayer.playing ? _audioPlayer.pause() : _audioPlayer.play();
-  }
-
-  void playNext() => _audioPlayer.hasNext ? _audioPlayer.seekToNext() : null;
-  void playPrevious() =>
-      _audioPlayer.hasPrevious ? _audioPlayer.seekToPrevious() : null;
-
-  // ================= PLAYLISTS =================
-  bool isLiked(SongData song) => _likedSongs.any((s) => s.id == song.id);
-
-  void toggleLike(SongData song) {
-    if (isLiked(song)) {
+  Future<void> toggleLike(SongData song) async {
+    final isLiked = _likedSongs.any((s) => s.id == song.id);
+    if (isLiked) {
       _likedSongs.removeWhere((s) => s.id == song.id);
-      _playlists["Liked"]?.removeWhere((s) => s.id == song.id);
     } else {
       _likedSongs.add(song);
-      _playlists["Liked"]?.add(song);
     }
-    _savePlaylist("Liked");
-    notifyListeners();
-  }
+    _playlists["Liked"] = _likedSongs;
 
-  void createPlaylist(String name) {
-    final trimmed = name.trim();
-    if (trimmed.isNotEmpty && !_playlists.containsKey(trimmed)) {
-      _playlists[trimmed] = [];
-      _savePlaylist(trimmed);
-      notifyListeners();
-    }
-  }
-
-  void deletePlaylist(String name) {
-    if (name == "Liked") return;
-    _playlists.remove(name);
-    _playlistBox.delete(name);
-    notifyListeners();
-  }
-
-  void addToPlaylist(String name, SongData song) {
-    if (_playlists.containsKey(name) &&
-        !_playlists[name]!.any((s) => s.id == song.id)) {
-      _playlists[name]!.add(song);
-      if (name == "Liked" && !isLiked(song)) _likedSongs.add(song);
-      _savePlaylist(name);
-      notifyListeners();
-    }
-  }
-
-  void _savePlaylist(String name) {
     if (!_isHiveReady) return;
-    final songIds = _playlists[name]?.map((song) => song.id).toList() ?? [];
-    _playlistBox.put(name, PlaylistData(name: name, songIds: songIds));
+    await _savePlaylistToHive("Liked");
+    notifyListeners();
   }
 
-  // ================= PLAYER MODES =================
+  bool isLiked(SongData song) => _likedSongs.any((s) => s.id == song.id);
+
+  Future<void> createPlaylist(String name) async {
+    if (_playlists.containsKey(name)) return;
+    _playlists[name] = [];
+    
+    if (_isHiveReady) {
+      await _savePlaylistToHive(name);
+    }
+    notifyListeners();
+  }
+
+  Future<void> addToPlaylist(String playlistName, SongData song) async {
+    if (!_playlists.containsKey(playlistName)) return;
+    
+    final playlist = _playlists[playlistName]!;
+    if (!playlist.any((s) => s.id == song.id)) {
+      playlist.add(song);
+      
+      if (_isHiveReady) {
+        await _savePlaylistToHive(playlistName);
+      }
+      notifyListeners();
+    }
+  }
+
+  Future<void> _savePlaylistToHive(String playlistName) async {
+    final playlist = _playlists[playlistName];
+    if (playlist == null) return;
+
+    final songIds = playlist.map((s) => s.id).toList();
+    final playlistData = PlaylistData(name: playlistName, songIds: songIds);
+    await _playlistBox.put(playlistName, playlistData);
+  }
+
+  // ================= PLAYBACK =================
+  Future<void> playSong(int index, {List<SongData>? customList}) async {
+    final List<SongData> sourceList = customList ?? _songs;
+    if (sourceList.isEmpty || index < 0 || index >= sourceList.length) return;
+
+    _currentPlaylist = sourceList;
+    _currentIndex = index;
+
+    // Check if audio_service is available
+    if (audioHandler != null) {
+      // Use audio_service for background playback
+      final mediaItems = sourceList.map((song) {
+        final artworkPath = getCustomArtwork(song.id);
+        return MediaItem(
+          id: song.data,
+          title: song.title,
+          artist: song.artist,
+          artUri: artworkPath != null ? Uri.file(artworkPath) : null,
+        );
+      }).toList();
+
+      try {
+        await audioHandler!.loadPlaylist(mediaItems, index);
+        notifyListeners();
+      } catch (e) {
+        debugPrint('Error loading audio source via audio_service: $e');
+      }
+    } else {
+      // Fallback to direct just_audio playback
+      List<AudioSource> audioSources = sourceList.map((song) {
+        return AudioSource.file(song.data);
+      }).toList();
+
+      try {
+        await _audioPlayer.setAudioSource(
+          ConcatenatingAudioSource(children: audioSources),
+          initialIndex: index,
+        );
+        await _audioPlayer.play();
+        notifyListeners();
+      } catch (e) {
+        debugPrint('Error loading audio source: $e');
+      }
+    }
+  }
+
+  void play() {
+    if (audioHandler != null) {
+      audioHandler!.play();
+    } else {
+      _audioPlayer.play();
+    }
+  }
+
+  void pause() {
+    if (audioHandler != null) {
+      audioHandler!.pause();
+    } else {
+      _audioPlayer.pause();
+    }
+  }
+
+  Future<void> skipToNext() async {
+    if (audioHandler != null) {
+      await audioHandler!.skipToNext();
+      _currentIndex = audioHandler!.currentIndex;
+    } else if (_audioPlayer.hasNext) {
+      await _audioPlayer.seekToNext();
+    }
+    notifyListeners();
+  }
+
+  Future<void> skipToPrevious() async {
+    if (audioHandler != null) {
+      await audioHandler!.skipToPrevious();
+      _currentIndex = audioHandler!.currentIndex;
+    } else if (_audioPlayer.hasPrevious) {
+      await _audioPlayer.seekToPrevious();
+    }
+    notifyListeners();
+  }
+
+  void seekTo(Duration position) {
+    if (audioHandler != null) {
+      audioHandler!.seek(position);
+    } else {
+      _audioPlayer.seek(position);
+    }
+  }
+
+  void Function() get playPrevious => skipToPrevious;
+  void Function() get togglePlay => _isPlaying ? pause : play;
+  void Function() get playNext => skipToNext;
+
   void toggleShuffle() {
     _isShuffleModeEnabled = !_isShuffleModeEnabled;
-    _audioPlayer.setShuffleModeEnabled(_isShuffleModeEnabled);
+    if (audioHandler != null) {
+      audioHandler!.setShuffleMode(
+        _isShuffleModeEnabled 
+          ? AudioServiceShuffleMode.all 
+          : AudioServiceShuffleMode.none,
+      );
+    } else {
+      _audioPlayer.setShuffleModeEnabled(_isShuffleModeEnabled);
+    }
     notifyListeners();
   }
 
@@ -417,13 +462,71 @@ class MusicProvider extends ChangeNotifier {
         : _loopMode == LoopMode.all
         ? LoopMode.one
         : LoopMode.off;
-    _audioPlayer.setLoopMode(_loopMode);
+    
+    if (audioHandler != null) {
+      audioHandler!.setRepeatMode(
+        _loopMode == LoopMode.off 
+          ? AudioServiceRepeatMode.none
+          : _loopMode == LoopMode.one
+          ? AudioServiceRepeatMode.one
+          : AudioServiceRepeatMode.all,
+      );
+    } else {
+      _audioPlayer.setLoopMode(_loopMode);
+    }
     notifyListeners();
+  }
+
+  // ================= SEARCH =================
+  void searchSongs(String query) {
+    if (query.isEmpty) {
+      _searchResults = [];
+    } else {
+      final lowercaseQuery = query.toLowerCase();
+      _searchResults = _allSongs.where((song) {
+        final titleMatch = song.title.toLowerCase().contains(lowercaseQuery);
+        
+        final artistLower = song.artist.toLowerCase();
+        final isUnknownArtist = artistLower == 'unknown' || 
+                                artistLower == 'unknown artist' ||
+                                artistLower.isEmpty;
+        final artistMatch = !isUnknownArtist && artistLower.contains(lowercaseQuery);
+        
+        return titleMatch || artistMatch;
+      }).toList();
+    }
+    notifyListeners();
+  }
+
+  // ================= CATEGORY & MISC =================
+  void setActiveCategory(String category) {
+    _activeCategory = category;
+    notifyListeners();
+  }
+
+  void shuffleAndPlay() {
+    if (_allSongs.isEmpty) return;
+    final shuffled = List<SongData>.from(_allSongs)..shuffle();
+    playSong(0, customList: shuffled);
+  }
+
+  Future<void> setCustomArtwork(int songId, String filePath) async {
+    try {
+      _artworkCache[songId] = filePath;
+      await _metadataBox.put(
+        songId,
+        CachedMetadata(songId: songId, localImagePath: filePath),
+      );
+      notifyListeners();
+      debugPrint("✅ Custom artwork set for song $songId");
+    } catch (e) {
+      debugPrint("Error setting custom artwork: $e");
+    }
   }
 
   @override
   void dispose() {
-    _audioPlayer.dispose();
+    _fallbackPlayer.dispose();
     super.dispose();
   }
 }
