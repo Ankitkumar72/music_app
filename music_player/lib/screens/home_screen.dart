@@ -8,6 +8,18 @@ import '../logic/models/song_data.dart';
 import '../logic/music_provider.dart';
 import '../widgets/mini_player.dart';
 
+// Helper function to get time-based greeting
+String _getGreeting() {
+  final hour = DateTime.now().hour;
+  if (hour < 12) {
+    return "Good Morning";
+  } else if (hour < 17) {
+    return "Good Afternoon";
+  } else {
+    return "Good Evening";
+  }
+}
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -19,40 +31,47 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          // 1. App Bar with Profile and Notifications
+          // 1. UPDATED: Centered Greeting Header
           SliverAppBar(
             floating: true,
             backgroundColor: Colors.transparent,
             elevation: 0,
-            leading: const Padding(
-              padding: EdgeInsets.all(8.0),
-              child: CircleAvatar(
-                backgroundColor: Color(0xFF6332F6),
-                child: Icon(Icons.person, color: Colors.white),
-              ),
-            ),
-            title: const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            leading: const SizedBox.shrink(), 
+            actions: [const SizedBox.shrink()], 
+            centerTitle: true, 
+            toolbarHeight: 80,
+            title: Column(
               children: [
                 Text(
-                  "Good Evening",
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                  _getGreeting(),
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.amber,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 1.1,
+                    shadows: [
+                      Shadow(
+                        blurRadius: 10.0,
+                        color: const Color(0xFFFFD700).withOpacity(0.8),
+                        offset: const Offset(0, 0),
+                      ),
+                      Shadow(
+                        blurRadius: 25.0,
+                        color: const Color(0xFFFFD700).withOpacity(0.5),
+                        offset: const Offset(0, 0),
+                      ),
+                    ],
+                  ),
                 ),
-                Text(
+                const Text(
                   "Pixy",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
-            actions: [
-              IconButton(
-                onPressed: () {},
-                icon: const Icon(Icons.notifications_none),
-              ),
-            ],
           ),
 
-          // 2. DYNAMIC Category Chips (Synced with your Hive Playlists)
+          // 2. DYNAMIC Category Chips
           SliverToBoxAdapter(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -73,7 +92,7 @@ class HomeScreen extends StatelessWidget {
             const Color(0xFF5D4037),
           ),
 
-          // 4. Large Horizontal Cards (Daily Mix 1 & Discovery)
+          // 4. Large Horizontal Cards
           SliverToBoxAdapter(
             child: SizedBox(
               height: 350,
@@ -81,21 +100,19 @@ class HomeScreen extends StatelessWidget {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 children: [
-                  // Daily Mix 1: Dynamic artists from songs played 3+ times
                   _buildLargeDailyMixCard(
                     context,
                     "Daily Mix 1",
                     musicProvider.dailyMixSongs.isEmpty
                         ? "Play more to build your mix"
-                            : musicProvider.dailyMixSongs
-                                  .map((s) => s.artist)
-                              .toSet()
-                              .take(3)
-                              .join(", "),
+                        : musicProvider.dailyMixSongs
+                            .map((s) => s.artist)
+                            .toSet()
+                            .take(3)
+                            .join(", "),
                     const Color(0xFF5D4037),
                     musicProvider.dailyMixSongs,
                   ),
-                  // Discovery: Picks 10 random songs from your library
                   _buildLargeDailyMixCard(
                     context,
                     "Discovery",
@@ -149,8 +166,12 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
 
-          // Bottom Padding for Mini Player and Navigation Bar
-          const SliverToBoxAdapter(child: SizedBox(height: 110)),
+          // 🔧 FIX: Dynamic Bottom Padding for Mini Player access
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: musicProvider.currentSong != null ? 160 : 20,
+            ),
+          ),
         ],
       ),
     );
@@ -163,11 +184,9 @@ class HomeScreen extends StatelessWidget {
 
     return GestureDetector(
       onTap: () {
-        provider.setActiveCategory(label); // Update selection state
-        final playlistSongs =
-            provider.allPlaylists[label] ?? []; // Fetch specific playlist data
+        provider.setActiveCategory(label);
+        final playlistSongs = provider.allPlaylists[label] ?? [];
 
-        // Navigate directly to the detailed view of the selected playlist
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -301,7 +320,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // --- Helper: Small Square Cards with Artwork logic ---
+  // --- Helper: Small Square Cards ---
   Widget _buildSmallRecentCard(
     String title,
     int songId,
@@ -422,21 +441,19 @@ class MixDetailScreen extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     subtitle: Text(
-                      song.artist,
+                      song.artist ?? "Unknown Artist",
                       style: const TextStyle(color: Colors.grey),
                     ),
                     onTap: () => context.read<MusicProvider>().playSong(
-                      index,
-                      customList: songs,
-                    ),
+                          index,
+                          customList: songs,
+                        ),
                   );
                 }, childCount: songs.length),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 100)),
             ],
           ),
-          
-          // Mini Player at the bottom
           const Positioned(
             left: 10,
             right: 10,
