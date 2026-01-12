@@ -66,16 +66,22 @@ class _SearchScreenState extends State<SearchScreen> {
                     prefixIcon: const Icon(Icons.search, color: Colors.white54),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
-                      icon: const Icon(Icons.clear, color: Colors.white54),
-                      onPressed: () {
-                        _searchController.clear();
-                        // Clear search results in provider
-                        musicProvider.searchSongs("");
-                      },
-                    )
+                            icon: const Icon(
+                              Icons.clear,
+                              color: Colors.white54,
+                            ),
+                            onPressed: () {
+                              _searchController.clear();
+                              // Clear search results in provider
+                              musicProvider.searchSongs("");
+                            },
+                          )
                         : const Icon(Icons.mic, color: Colors.white54),
                     border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 15,
+                    ),
                   ),
                 ),
               ),
@@ -87,14 +93,17 @@ class _SearchScreenState extends State<SearchScreen> {
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: ["Top Results", "Artists", "Songs", "Albums"]
-                        .map((cat) => Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: FilterTab(
-                        label: cat,
-                        isSelected: _selectedCategory == cat,
-                        onTap: () => setState(() => _selectedCategory = cat),
-                      ),
-                    ))
+                        .map(
+                          (cat) => Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: FilterTab(
+                              label: cat,
+                              isSelected: _selectedCategory == cat,
+                              onTap: () =>
+                                  setState(() => _selectedCategory = cat),
+                            ),
+                          ),
+                        )
                         .toList(),
                   ),
                 ),
@@ -133,12 +142,13 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
               ),
               TextButton(
-                onPressed: () {
-                  // TODO: Implement clear recent searches logic
-                },
+                onPressed: () {},
                 child: const Text(
                   "CLEAR ALL",
-                  style: TextStyle(color: Color(0xFF6332F6), fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    color: Color(0xFF6332F6),
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
@@ -178,7 +188,9 @@ class _SearchScreenState extends State<SearchScreen> {
                   const Color(0xFF1E1E2C),
                   Icons.bar_chart,
                   onTap: () {
-                    final dailyMix = musicProvider.dailyMixSongs.take(10).toList();
+                    final dailyMix = musicProvider.dailyMixSongs
+                        .take(10)
+                        .toList();
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -306,24 +318,24 @@ class _SearchScreenState extends State<SearchScreen> {
             // Display custom artwork if available, else fallback to QueryArtworkWidget
             child: customPath != null && File(customPath).existsSync()
                 ? ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.file(
-                File(customPath),
-                fit: BoxFit.cover,
-              ),
-            )
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(File(customPath), fit: BoxFit.cover),
+                  )
                 : QueryArtworkWidget(
-              id: song.id,
-              type: ArtworkType.AUDIO,
-              nullArtworkWidget: const Icon(
-                Icons.music_note,
-                color: Colors.white54,
-              ),
-            ),
+                    id: song.id,
+                    type: ArtworkType.AUDIO,
+                    nullArtworkWidget: const Icon(
+                      Icons.music_note,
+                      color: Colors.white54,
+                    ),
+                  ),
           ),
           title: Text(
             song.title,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w500,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),

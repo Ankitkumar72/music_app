@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
 import 'home_screen.dart';
 import 'library_screen.dart';
@@ -26,16 +27,33 @@ class _NavigationShellState extends State<NavigationShell> {
   }
 
   Future<void> _checkPermissions() async {
-    // Request audio/storage permission
-    PermissionStatus status = await Permission.audio.request();
-    if (!status.isGranted) {
-      status = await Permission.storage.request();
+    try {
+      // Add delay to ensure Activity is ready
+      await Future.delayed(const Duration(milliseconds: 100));
+      
+      if (Platform.isAndroid) {
+        // Request audio/storage permission
+        if (await Permission.audio.isGranted || await Permission.storage.isGranted) {
+           // already granted
+        } else {
+           PermissionStatus status = await Permission.audio.request();
+           if (!status.isGranted) {
+             await Permission.storage.request();
+           }
+        }
+        
+        // Request notification permission for Android 13+
+        if (await Permission.notification.isDenied) {
+          await Permission.notification.request();
+        }
+      }
+      
+      setState(() => _hasPermission = true); // Allow access even if partial denied, to avoid blocking UI loop
+    } catch (e) {
+      debugPrint('Permission check error: $e');
+      // Continue anyway
+      setState(() => _hasPermission = true);
     }
-    
-    // Request notification permission for Android 13+ (for media controls)
-    await Permission.notification.request();
-    
-    setState(() => _hasPermission = status.isGranted);
   }
 
   final List<Widget> _screens = [

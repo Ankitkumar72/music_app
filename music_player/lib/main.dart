@@ -7,6 +7,8 @@ import 'logic/music_provider.dart';
 import 'logic/Models/song_data.dart';
 import 'logic/audio_handler.dart';
 
+AudioPlayerHandler? audioHandler;
+
 void main() async {
   // 1. Initialize Flutter bindings
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,14 +28,12 @@ void main() async {
   try {
     audioHandler = await AudioService.init(
       builder: () => AudioPlayerHandler(),
-      config: const AudioServiceConfig(
-        androidNotificationChannelId: 'com.pixy.musicplayer.channel.audio',
-        androidNotificationChannelName: 'Pixy Music',
+      config: AudioServiceConfig(
+        androidNotificationChannelId: 'com.example.music_player.debug.audio',
+        androidNotificationChannelName: 'Music Playback',
         androidNotificationOngoing: true,
         androidStopForegroundOnPause: true,
         androidNotificationIcon: 'mipmap/ic_launcher',
-        preloadArtwork: true,
-        androidShowNotificationBadge: true,
       ),
     );
     debugPrint("✅ AudioService initialized successfully: $audioHandler");

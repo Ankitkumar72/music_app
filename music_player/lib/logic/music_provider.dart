@@ -12,7 +12,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
 
 import 'Models/song_data.dart';
-import 'audio_handler.dart';
+
+import '../main.dart';
 
 class MusicProvider extends ChangeNotifier {
   final OnAudioQuery _audioQuery = OnAudioQuery();
@@ -613,33 +614,44 @@ class MusicProvider extends ChangeNotifier {
         return MediaItem(
           id: song.data,
           title: song.title,
-          artist: song.artist,
+          artist: song.artist.isEmpty ? 'Unknown Artist' : song.artist,
+          album: song.artist.isEmpty ? 'Unknown Album' : song.artist, // Use artist as album
           artUri: artworkPath != null ? Uri.file(artworkPath) : null,
         );
       }).toList();
 
       try {
-        await audioHandler!.loadPlaylist(mediaItems, index);
+        await audioHandler!.playPlaylist(mediaItems, initialIndex: index);
+        _isPlaying = true;
+        debugPrint('✅ Playing via audio_service: ${mediaItems[index].title}');
         notifyListeners();
       } catch (e) {
-        debugPrint('Error loading audio source via audio_service: $e');
+        debugPrint('❌ Error loading audio source via audio_service: $e');
+        // Fallback to direct playback
+        _fallbackPlayback(sourceList, index);
       }
     } else {
       // Fallback to direct just_audio playback
-      List<AudioSource> audioSources = sourceList.map((song) {
-        return AudioSource.file(song.data);
-      }).toList();
+      _fallbackPlayback(sourceList, index);
+    }
+  }
 
-      try {
-        await _audioPlayer.setAudioSource(
-          ConcatenatingAudioSource(children: audioSources),
-          initialIndex: index,
-        );
-        await _audioPlayer.play();
-        notifyListeners();
-      } catch (e) {
-        debugPrint('Error loading audio source: $e');
-      }
+  // Helper method for fallback playback
+  Future<void> _fallbackPlayback(List<SongData> sourceList, int index) async {
+    debugPrint('⚠️ Using fallback audio player (audio_service not available)');
+    List<AudioSource> audioSources = sourceList.map((song) {
+      return AudioSource.file(song.data);
+    }).toList();
+
+    try {
+      await _audioPlayer.setAudioSource(
+        ConcatenatingAudioSource(children: audioSources),
+        initialIndex: index,
+      );
+      await _audioPlayer.play();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('❌ Error loading audio source: $e');
     }
   }
 
@@ -659,10 +671,19 @@ class MusicProvider extends ChangeNotifier {
     }
   }
 
+  void stop() {
+    if (audioHandler != null) {
+      audioHandler!.stop();
+    } else {
+      _audioPlayer.stop();
+    }
+  }
+
   Future<void> skipToNext() async {
     if (audioHandler != null) {
       await audioHandler!.skipToNext();
-      _currentIndex = audioHandler!.currentIndex;
+      // await audioHandler!.skipToNext(); // Removed duplicate
+      _currentIndex = audioHandler!.player.currentIndex ?? 0;
     } else if (_audioPlayer.hasNext) {
       await _audioPlayer.seekToNext();
     }
@@ -672,7 +693,8 @@ class MusicProvider extends ChangeNotifier {
   Future<void> skipToPrevious() async {
     if (audioHandler != null) {
       await audioHandler!.skipToPrevious();
-      _currentIndex = audioHandler!.currentIndex;
+      // await audioHandler!.skipToPrevious(); // Removed duplicate
+      _currentIndex = audioHandler!.player.currentIndex ?? 0;
     } else if (_audioPlayer.hasPrevious) {
       await _audioPlayer.seekToPrevious();
     }
@@ -702,10 +724,8 @@ class MusicProvider extends ChangeNotifier {
   void toggleShuffle() {
     _isShuffleModeEnabled = !_isShuffleModeEnabled;
     if (audioHandler != null) {
-      audioHandler!.setShuffleMode(
-        _isShuffleModeEnabled 
-          ? AudioServiceShuffleMode.all 
-          : AudioServiceShuffleMode.none,
+      audioHandler!.player.setShuffleModeEnabled(
+        _isShuffleModeEnabled,
       );
     } else {
       _audioPlayer.setShuffleModeEnabled(_isShuffleModeEnabled);
@@ -721,13 +741,7 @@ class MusicProvider extends ChangeNotifier {
         : LoopMode.off;
     
     if (audioHandler != null) {
-      audioHandler!.setRepeatMode(
-        _loopMode == LoopMode.off 
-          ? AudioServiceRepeatMode.none
-          : _loopMode == LoopMode.one
-          ? AudioServiceRepeatMode.one
-          : AudioServiceRepeatMode.all,
-      );
+      audioHandler!.player.setLoopMode(_loopMode);
     } else {
       _audioPlayer.setLoopMode(_loopMode);
     }
