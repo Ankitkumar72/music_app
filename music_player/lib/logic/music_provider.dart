@@ -39,6 +39,9 @@ class MusicProvider extends ChangeNotifier {
   // Cache for internet artwork paths
   final Map<int, String?> _artworkCache = {};
 
+  // ================= EXCLUDED SONGS =================
+  List<int> _excludedSongIds = [];
+
   // ================= STATE =================
   int _currentIndex = -1;
   bool _isLoading = true;
@@ -358,8 +361,9 @@ class MusicProvider extends ChangeNotifier {
 
       _playCounts = Map<int, int>.from(_statsBox.get('playCounts', defaultValue: {}));
       _recentIds = List<int>.from(_statsBox.get('recentIds', defaultValue: []));
+      _excludedSongIds = List<int>.from(_statsBox.get('excludedSongIds', defaultValue: []));
 
-      debugPrint("✅ Hive ready | Artwork: ${_artworkCache.length} | Stats loaded");
+      debugPrint("✅ Hive ready | Artwork: ${_artworkCache.length} | Excluded: ${_excludedSongIds.length} | Stats loaded");
       fetchSongs();
     } catch (e) {
       debugPrint("Error initializing Hive: $e");
@@ -424,6 +428,10 @@ class MusicProvider extends ChangeNotifier {
       }).toList();
 
       _songs = _songs.where((s) => File(s.data).existsSync()).toList();
+      
+      // Filter out excluded songs
+      _songs = _songs.where((s) => !_excludedSongIds.contains(s.id)).toList();
+      
       _songs.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
 
       _allSongs = List.from(_songs);
@@ -452,6 +460,90 @@ class MusicProvider extends ChangeNotifier {
   }
 
   bool isLiked(SongData song) => _likedSongs.any((s) => s.id == song.id);
+
+  // ================= EXCLUDE SONGS =================
+  List<int> get excludedSongIds => _excludedSongIds;
+  
+  /// Excludes a song from the library (persisted across rescans)
+  Future<void> excludeSong(SongData song) async {
+    if (_excludedSongIds.contains(song.id)) return;
+    
+    // Check if this song is currently playing
+    final isCurrentlyPlaying = currentSong?.id == song.id;
+    
+    _excludedSongIds.add(song.id);
+    _songs.removeWhere((s) => s.id == song.id);
+    _allSongs.removeWhere((s) => s.id == song.id);
+    _likedSongs.removeWhere((s) => s.id == song.id);
+    
+    // Remove from current playlist
+    _currentPlaylist.removeWhere((s) => s.id == song.id);
+    
+    // Remove from all playlists
+    for (final playlist in _playlists.values) {
+      playlist.removeWhere((s) => s.id == song.id);
+    }
+    
+    // If the excluded song was playing, handle playback
+    if (isCurrentlyPlaying) {
+      if (_currentPlaylist.isNotEmpty && _currentIndex < _currentPlaylist.length) {
+        // There are more songs in the queue, play the next one
+        await skipToNext();
+      } else if (_allSongs.isNotEmpty) {
+        // No songs in queue, but library has songs - just stop
+        _currentIndex = -1;
+        pause();
+      } else {
+        // No songs left at all
+        _currentIndex = -1;
+        pause();
+      }
+    } else if (_currentIndex > 0) {
+      // Adjust current index if needed (song before current was removed)
+      // Find new index of currently playing song
+      final currentId = currentSong?.id;
+      if (currentId != null) {
+        final newIndex = _currentPlaylist.indexWhere((s) => s.id == currentId);
+        if (newIndex != -1) {
+          _currentIndex = newIndex;
+        }
+      }
+    }
+    
+    if (_isHiveReady) {
+      await _statsBox.put('excludedSongIds', _excludedSongIds);
+    }
+    
+    notifyListeners();
+    debugPrint("🚫 Song excluded: ${song.title} (ID: ${song.id})");
+  }
+  
+  /// Restores a previously excluded song
+  Future<void> restoreSong(int songId) async {
+    if (!_excludedSongIds.contains(songId)) return;
+    
+    _excludedSongIds.remove(songId);
+    
+    if (_isHiveReady) {
+      await _statsBox.put('excludedSongIds', _excludedSongIds);
+    }
+    
+    // Refetch songs to include the restored one
+    await fetchSongs();
+    debugPrint("✅ Song restored (ID: $songId)");
+  }
+  
+  /// Restores all excluded songs
+  Future<void> restoreAllSongs() async {
+    _excludedSongIds.clear();
+    
+    if (_isHiveReady) {
+      await _statsBox.put('excludedSongIds', _excludedSongIds);
+    }
+    
+    await fetchSongs();
+    debugPrint("✅ All excluded songs restored");
+  }
 
   Future<void> createPlaylist(String name) async {
     if (_playlists.containsKey(name)) return;
@@ -577,7 +669,15 @@ class MusicProvider extends ChangeNotifier {
   }
 
   void Function() get playPrevious => skipToPrevious;
-  void Function() get togglePlay => _isPlaying ? pause : play;
+  
+  void togglePlay() {
+    if (_isPlaying) {
+      pause();
+    } else {
+      play();
+    }
+  }
+  
   void Function() get playNext => skipToNext;
 
   void toggleShuffle() {

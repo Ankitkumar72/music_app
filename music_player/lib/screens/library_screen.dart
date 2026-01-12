@@ -8,6 +8,7 @@ import 'package:on_audio_query/on_audio_query.dart';
 import '../logic/music_provider.dart';
 import '../logic/Models/song_data.dart';
 import '../widgets/filter_tab.dart';
+import '../widgets/song_menu.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -179,16 +180,30 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   Widget _buildTopNavBar(BuildContext context) {
+    final songCount = context.watch<MusicProvider>().allSongs.length;
+    
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text(
-          "Library",
-          style: TextStyle(
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Library",
+              style: TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            Text(
+              "$songCount songs",
+              style: const TextStyle(
+                fontSize: 14,
+                color: Colors.white54,
+              ),
+            ),
+          ],
         ),
         IconButton(
           icon: const Icon(Icons.search, color: Colors.white, size: 28),
@@ -326,7 +341,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
         song.artist,
         style: const TextStyle(color: Colors.white54, fontSize: 12),
       ),
-      trailing: const Icon(Icons.more_horiz, color: Colors.white54),
+      trailing: GestureDetector(
+        onTap: () => showSongMenu(context, song),
+        child: const Padding(
+          padding: EdgeInsets.all(8.0),
+          child: Icon(Icons.more_horiz, color: Colors.white54),
+        ),
+      ),
       onTap: () {
         provider.playSong(index, customList: playlist);
       },

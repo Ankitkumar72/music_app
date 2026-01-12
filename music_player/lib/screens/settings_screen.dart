@@ -251,6 +251,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 12),
 
+                  // Excluded Songs
+                  Builder(
+                    builder: (context) {
+                      final excludedCount = context.watch<MusicProvider>().excludedSongIds.length;
+                      return _buildActionCard(
+                        icon: Icons.music_off_rounded,
+                        iconColor: const Color(0xFFFF5722),
+                        title: "Excluded Songs",
+                        subtitle: excludedCount == 0
+                            ? "No songs excluded"
+                            : "$excludedCount song(s) hidden from library",
+                        onTap: () => _showExcludedSongsDialog(context),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
                   // Metadata Refresh
                   _buildActionCard(
                     icon: Icons.sync_rounded,
@@ -899,5 +916,155 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _showSnackBar("Error resetting app: $e");
       }
     }
+  }
+
+  Future<void> _showExcludedSongsDialog(BuildContext context) async {
+    final provider = context.read<MusicProvider>();
+    final excludedIds = List<int>.from(provider.excludedSongIds);
+
+    if (excludedIds.isEmpty) {
+      _showSnackBar("No songs have been excluded");
+      return;
+    }
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1A2E),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              const Icon(Icons.music_off_rounded, color: Color(0xFFFF5722)),
+              const SizedBox(width: 8),
+              const Text("Excluded Songs"),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF5722).withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  "${excludedIds.length}",
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFFFF5722),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Tap a song to restore it to your library:",
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Flexible(
+                  child: excludedIds.isEmpty
+                      ? const Center(
+                          child: Text(
+                            "All songs have been restored!",
+                            style: TextStyle(color: Colors.white54),
+                          ),
+                        )
+                      : ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: excludedIds.length,
+                          itemBuilder: (context, index) {
+                            final songId = excludedIds[index];
+                            return ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: Colors.white10,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.music_note,
+                                  color: Colors.white54,
+                                  size: 20,
+                                ),
+                              ),
+                              title: Text(
+                                "Song ID: $songId",
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              subtitle: const Text(
+                                "Tap to restore",
+                                style: TextStyle(
+                                  color: Colors.white38,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(
+                                  Icons.restore,
+                                  color: Color(0xFF4CAF50),
+                                ),
+                                onPressed: () async {
+                                  await provider.restoreSong(songId);
+                                  setDialogState(() {
+                                    excludedIds.remove(songId);
+                                  });
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(this.context).showSnackBar(
+                                      SnackBar(
+                                        content: const Text("Song restored to library"),
+                                        backgroundColor: const Color(0xFF4CAF50),
+                                        behavior: SnackBarBehavior.floating,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            if (excludedIds.isNotEmpty)
+              TextButton(
+                onPressed: () async {
+                  await provider.restoreAllSongs();
+                  if (dialogContext.mounted) {
+                    Navigator.pop(dialogContext);
+                  }
+                  _showSnackBar("All songs restored to library");
+                },
+                child: const Text(
+                  "Restore All",
+                  style: TextStyle(color: Color(0xFF4CAF50)),
+                ),
+              ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text("Close"),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
