@@ -60,6 +60,144 @@ class MusicProvider extends ChangeNotifier {
   List<String> get playlistNames => _playlists.keys.toList();
   String get activeCategory => _activeCategory;
   List<SongData> get searchResults => _searchResults;
+  
+  // Library search results
+  List<SongData> _librarySearchResults = [];
+  String _librarySearchQuery = '';
+  List<SongData> get librarySearchResults => _librarySearchResults;
+  String get librarySearchQuery => _librarySearchQuery;
+
+  // ================= GROUPING GETTERS =================
+  
+  /// Returns a list of unique artists (excluding "Unknown" artists)
+  List<String> get artists {
+    final artistSet = <String>{};
+    for (final song in _allSongs) {
+      final artist = song.artist.trim();
+      if (artist.isNotEmpty && 
+          artist.toLowerCase() != 'unknown' && 
+          artist.toLowerCase() != 'unknown artist') {
+        artistSet.add(artist);
+      }
+    }
+    final artistList = artistSet.toList();
+    artistList.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return artistList;
+  }
+
+  /// Returns a list of unique albums (using artist as a grouping key since we don't have album metadata)
+  /// Each "album" is represented as the artist name for grouping purposes
+  List<String> get albums {
+    // Since SongData doesn't have album field, we'll group by artist
+    // This creates "albums" as collections by the same artist
+    return artists;
+  }
+
+  /// Returns a list of unique genres
+  /// Since we don't have genre metadata, we'll create some based on patterns
+  List<String> get genres {
+    // Generate some pseudo-genres based on artist or title patterns
+    // For now, return a predefined list that can be expanded later
+    final genreSet = <String>{'All Songs', 'Favorites'};
+    
+    // Add "By Artist" genres for artists with multiple songs
+    final artistCounts = <String, int>{};
+    for (final song in _allSongs) {
+      final artist = song.artist.trim();
+      if (artist.isNotEmpty && 
+          artist.toLowerCase() != 'unknown' && 
+          artist.toLowerCase() != 'unknown artist') {
+        artistCounts[artist] = (artistCounts[artist] ?? 0) + 1;
+      }
+    }
+    
+    // Artists with 3+ songs get their own "genre"
+    for (final entry in artistCounts.entries) {
+      if (entry.value >= 3) {
+        genreSet.add(entry.key);
+      }
+    }
+    
+    final genreList = genreSet.toList();
+    genreList.sort((a, b) {
+      // Keep "All Songs" and "Favorites" at the top
+      if (a == 'All Songs') return -1;
+      if (b == 'All Songs') return 1;
+      if (a == 'Favorites') return -1;
+      if (b == 'Favorites') return 1;
+      return a.toLowerCase().compareTo(b.toLowerCase());
+    });
+    return genreList;
+  }
+
+  /// Get songs by a specific artist
+  List<SongData> getSongsByArtist(String artist) {
+    return _allSongs.where((song) => 
+      song.artist.toLowerCase() == artist.toLowerCase()
+    ).toList();
+  }
+
+  /// Get songs by "album" (grouping by artist since we don't have album metadata)
+  List<SongData> getSongsByAlbum(String album) {
+    // Since albums are artist-based groupings
+    return getSongsByArtist(album);
+  }
+
+  /// Get songs by genre
+  List<SongData> getSongsByGenre(String genre) {
+    if (genre == 'All Songs') {
+      return List.from(_allSongs);
+    }
+    if (genre == 'Favorites') {
+      return List.from(_likedSongs);
+    }
+    // Otherwise, treat genre as an artist name
+    return getSongsByArtist(genre);
+  }
+
+  /// Get first song for an artist (for artwork display)
+  SongData? getFirstSongByArtist(String artist) {
+    try {
+      return _allSongs.firstWhere((song) => 
+        song.artist.toLowerCase() == artist.toLowerCase()
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Get song count for an artist
+  int getSongCountByArtist(String artist) {
+    return _allSongs.where((song) => 
+      song.artist.toLowerCase() == artist.toLowerCase()
+    ).length;
+  }
+
+  // ================= LIBRARY SEARCH =================
+  void searchLibrary(String query) {
+    _librarySearchQuery = query;
+    if (query.isEmpty) {
+      _librarySearchResults = [];
+    } else {
+      final lowercaseQuery = query.toLowerCase();
+      _librarySearchResults = _allSongs.where((song) {
+        final titleMatch = song.title.toLowerCase().contains(lowercaseQuery);
+        final artistLower = song.artist.toLowerCase();
+        final isUnknownArtist = artistLower == 'unknown' || 
+                                artistLower == 'unknown artist' ||
+                                artistLower.isEmpty;
+        final artistMatch = !isUnknownArtist && artistLower.contains(lowercaseQuery);
+        return titleMatch || artistMatch;
+      }).toList();
+    }
+    notifyListeners();
+  }
+
+  void clearLibrarySearch() {
+    _librarySearchQuery = '';
+    _librarySearchResults = [];
+    notifyListeners();
+  }
 
   bool get isLoading => _isLoading;
   bool get isPlaying => _isPlaying;
