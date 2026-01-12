@@ -44,8 +44,6 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 20),
-                _buildHeader(context, allPlaylists),
-                const SizedBox(height: 30),
                 _buildTitleSection(context, musicProvider),
                 const SizedBox(height: 25),
                 _buildFilterTabs(),
@@ -106,23 +104,8 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     BuildContext context,
     Map<String, List<SongData>> allPlaylists,
   ) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        GestureDetector(
-          onTap: () => _showProfileMenu(context),
-          child: const CircleAvatar(
-            radius: 22,
-            backgroundColor: Color(0xFFD4A574),
-            child: Icon(Icons.person, color: Colors.white),
-          ),
-        ),
-        IconButton(
-          icon: const Icon(Icons.more_vert, color: Colors.white70, size: 28),
-          onPressed: () => _showMoreOptions(context),
-        ),
-      ],
-    );
+    // Header simplified - avatar and menu removed
+    return const SizedBox(height: 10);
   }
 
   Widget _buildTitleSection(BuildContext context, MusicProvider provider) {
