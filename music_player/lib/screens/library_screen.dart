@@ -453,7 +453,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
       itemBuilder: (context, index) {
         final genre = genres[index];
         final songs = provider.getSongsByGenre(genre);
-        final firstSong = songs.isNotEmpty ? songs.first : null;
 
         return ListTile(
           contentPadding: const EdgeInsets.symmetric(vertical: 8),

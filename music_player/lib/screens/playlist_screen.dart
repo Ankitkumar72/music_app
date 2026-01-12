@@ -100,14 +100,6 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
 
   // ───────────────────────────────── UI SECTIONS ─────────────────────────────────
 
-  Widget _buildHeader(
-    BuildContext context,
-    Map<String, List<SongData>> allPlaylists,
-  ) {
-    // Header simplified - avatar and menu removed
-    return const SizedBox(height: 10);
-  }
-
   Widget _buildTitleSection(BuildContext context, MusicProvider provider) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -360,11 +352,54 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     );
   }
 
-  void _showProfileMenu(BuildContext context) {}
-  void _showMoreOptions(BuildContext context) {}
   void _showPlaylistOptions(
     BuildContext context,
     String name,
     MusicProvider provider,
-  ) {}
+  ) {
+    if (name == "Liked") return; // Can't delete Liked playlist
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A24),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 16),
+            Text(
+              name,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
+              title: const Text(
+                "Delete Playlist",
+                style: TextStyle(color: Colors.red),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                provider.deletePlaylist(name);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Deleted "$name"'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
 }

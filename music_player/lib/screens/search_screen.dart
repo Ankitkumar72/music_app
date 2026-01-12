@@ -219,32 +219,6 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  // Builds a single recent search item list tile
-  Widget _buildRecentSearchItem(String title, String subtitle, String imagePath) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Container(
-        width: 50,
-        height: 50,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          // Placeholder color since we don't have actual assets yet
-          color: Colors.white10,
-        ),
-        // Replace with actual image logic when available
-        child: const Icon(Icons.music_note, color: Colors.white54),
-      ),
-      title: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
-      subtitle: Text(subtitle, style: const TextStyle(color: Colors.white54)),
-      trailing: IconButton(
-        icon: const Icon(Icons.close, color: Colors.white54),
-        onPressed: () {
-          // TODO: Implement remove single recent search logic
-        },
-      ),
-    );
-  }
-
   // Builds a browse card (Charts, New Releases)
   Widget _buildBrowseCard(
     String subtitle,
@@ -354,7 +328,7 @@ class _SearchScreenState extends State<SearchScreen> {
             overflow: TextOverflow.ellipsis,
           ),
           subtitle: Text(
-            song.artist ?? "Unknown Artist",
+            song.artist,
             style: const TextStyle(color: Colors.white54),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,

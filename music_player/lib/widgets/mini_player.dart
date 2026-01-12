@@ -5,7 +5,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:on_audio_query/on_audio_query.dart';
-import 'package:palette_generator/palette_generator.dart';
 
 import '../logic/music_provider.dart';
 import '../screens/now_playing_screen.dart';
@@ -18,7 +17,6 @@ class MiniPlayer extends StatefulWidget {
 }
 
 class _MiniPlayerState extends State<MiniPlayer> {
-  PaletteGenerator? _paletteGenerator;
   Color _backgroundColor = Colors.grey;
   int? _lastSongId;
 

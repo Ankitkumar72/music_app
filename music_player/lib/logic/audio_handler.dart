@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:flutter/material.dart';

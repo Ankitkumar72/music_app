@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../logic/Models/song_data.dart';
 import '../logic/music_provider.dart';
-import 'package:dio/dio.dart';
 
 class ArtworkSearchDialog extends StatefulWidget {
   final SongData song;

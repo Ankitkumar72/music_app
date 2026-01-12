@@ -555,6 +555,25 @@ class MusicProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> deletePlaylist(String name) async {
+    if (name == "Liked") return; // Cannot delete Liked playlist
+    if (!_playlists.containsKey(name)) return;
+    
+    _playlists.remove(name);
+    
+    if (_isHiveReady) {
+      final key = _playlistBox.keys.firstWhere(
+        (k) => _playlistBox.get(k)?.name == name,
+        orElse: () => null,
+      );
+      if (key != null) {
+        await _playlistBox.delete(key);
+      }
+    }
+    notifyListeners();
+    debugPrint("🗑️ Playlist deleted: $name");
+  }
+
   Future<void> addToPlaylist(String playlistName, SongData song) async {
     if (!_playlists.containsKey(playlistName)) return;
     

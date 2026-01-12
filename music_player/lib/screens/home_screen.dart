@@ -478,7 +478,7 @@ class MixDetailScreen extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       subtitle: Text(
-                        song.artist ?? "Unknown Artist",
+                        song.artist,
                         style: const TextStyle(color: Colors.grey),
                       ),
                       onTap: () => context.read<MusicProvider>().playSong(
