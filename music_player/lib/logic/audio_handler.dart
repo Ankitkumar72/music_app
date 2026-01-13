@@ -1,17 +1,30 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:flutter/foundation.dart';
 
 class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer _player = AudioPlayer();
   
   AudioPlayerHandler() {
-    // Pipe the playback state from just_audio to audio_service
     _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
     
     // Listen for index changes to update the current media item in the notification
-    _player.currentIndexStream.listen((index) {
+    _player.currentIndexStream.listen((index) async {
       if (index != null && queue.value.isNotEmpty && index < queue.value.length) {
-        mediaItem.add(queue.value[index]);
+        final item = queue.value[index];
+        
+        // Force Android to refresh artwork by recreating MediaItem with timestamp
+        final updatedItem = MediaItem(
+          id: item.id,
+          title: item.title,
+          artist: item.artist,
+          album: item.album,
+          artUri: item.artUri,
+          extras: {'timestamp': DateTime.now().millisecondsSinceEpoch},
+        );
+        
+        mediaItem.add(updatedItem);
+        debugPrint('🎵 Notification updated: ${item.title} - Artwork: ${item.artUri != null ? "YES (${item.artUri})" : "NO"}');
       }
     });
   }
@@ -22,14 +35,13 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
         MediaControl.skipToPrevious,
         if (_player.playing) MediaControl.pause else MediaControl.play,
         MediaControl.skipToNext,
-        MediaControl.stop,
       ],
       systemActions: const {
         MediaAction.seek,
         MediaAction.seekForward,
         MediaAction.seekBackward,
       },
-      androidCompactActionIndices: const [0, 1, 2],
+      androidCompactActionIndices: const [0, 1, 2], // Previous, Play/Pause, Next
       processingState: const {
         ProcessingState.idle: AudioProcessingState.idle,
         ProcessingState.loading: AudioProcessingState.loading,
@@ -79,10 +91,28 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   Future<void> seek(Duration position) => _player.seek(position);
 
   @override
-  Future<void> skipToNext() => _player.seekToNext();
+  Future<void> skipToNext() async {
+    // Check if there's a next track before attempting to skip
+    if (_player.hasNext) {
+      await _player.seekToNext();
+      // Auto-play the next song even if current was paused
+      if (!_player.playing) {
+        await _player.play();
+      }
+    }
+  }
 
   @override
-  Future<void> skipToPrevious() => _player.seekToPrevious();
+  Future<void> skipToPrevious() async {
+    // Check if there's a previous track before attempting to skip
+    if (_player.hasPrevious) {
+      await _player.seekToPrevious();
+      // Auto-play the previous song even if current was paused
+      if (!_player.playing) {
+        await _player.play();
+      }
+    }
+  }
 
   @override
   Future<void> stop() async {

@@ -10,16 +10,20 @@ import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 import 'Models/song_data.dart';
-
+import 'audio_handler.dart';
 import '../main.dart';
 
 class MusicProvider extends ChangeNotifier {
   final OnAudioQuery _audioQuery = OnAudioQuery();
 
-  // Use the global audio handler's player if available
-  AudioPlayer get _audioPlayer => audioHandler?.player ?? _fallbackPlayer;
+  // Helper to safely get the audio handler from the global variable
+  AudioPlayerHandler? get _handler => audioHandler;
+
+  // Use AudioService's audio handler player if available
+  AudioPlayer get _audioPlayer => _handler?.player ?? _fallbackPlayer;
   
   // Fallback player for when audio_service isn't initialized
   final AudioPlayer _fallbackPlayer = AudioPlayer();
@@ -226,23 +230,70 @@ class MusicProvider extends ChangeNotifier {
   // ================= MANUAL ARTWORK SEARCH =================
   Future<List<Map<String, dynamic>>> searchArtwork(String query) async {
     try {
-      final cleanQuery = Uri.encodeComponent(query);
-      final url =
-          'https://itunes.apple.com/search?term=$cleanQuery&media=music&limit=10';
-      debugPrint("Searching iTunes API: $url");
-
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        final Map<String, dynamic> data = json.decode(response.body);
-        return List<Map<String, dynamic>>.from(data['results'] ?? []);
-      } else {
-        debugPrint("API error: ${response.statusCode}");
-        return [];
+      // Try Deezer first (1000x1000, free, no API key needed)
+      final deezerResults = await _searchDeezer(query);
+      if (deezerResults.isNotEmpty) {
+        debugPrint("✅ Found artwork via Deezer (1000x1000)");
+        return deezerResults;
       }
+
+      // Fallback to iTunes (600x600)
+      final itunesResults = await _searchItunes(query);
+      if (itunesResults.isNotEmpty) {
+        debugPrint("✅ Found artwork via iTunes (600x600)");
+        return itunesResults;
+      }
+
+      debugPrint("❌ No artwork found for: $query");
+      return [];
     } catch (e) {
       debugPrint("Error searching artwork: $e");
       return [];
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _searchDeezer(String query) async {
+    try {
+      final cleanQuery = Uri.encodeComponent(query);
+      final url = 'https://api.deezer.com/search?q=$cleanQuery';
+      
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List results = data['data'] ?? [];
+        
+        return results.map((item) => {
+          'artworkUrl100': item['album']?['cover_xl'] ?? item['album']?['cover_big'] ?? '',
+          'trackName': item['title'] ?? '',
+          'artistName': item['artist']?['name'] ?? '',
+        }).toList().cast<Map<String, dynamic>>();
+      }
+    } catch (e) {
+      debugPrint("Deezer API error: $e");
+    }
+    return [];
+  }
+
+  Future<List<Map<String, dynamic>>> _searchItunes(String query) async {
+    try {
+      final cleanQuery = Uri.encodeComponent(query);
+      final url = 'https://itunes.apple.com/search?term=$cleanQuery&media=music&limit=10';
+
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List results = data['results'] ?? [];
+        
+        return results.map((item) => {
+          'artworkUrl100': item['artworkUrl100']?.toString().replaceAll('100x100bb', '600x600bb') ?? '',
+          'trackName': item['trackName'] ?? '',
+          'artistName': item['artistName'] ?? '',
+        }).toList().cast<Map<String, dynamic>>();
+      }
+    } catch (e) {
+      debugPrint("iTunes API error: $e");
+    }
+    return [];
   }
 
   Future<void> applyChosenArtwork(
@@ -332,7 +383,7 @@ class MusicProvider extends ChangeNotifier {
   }
 
   void _updateNotificationMetadata() {
-    if (currentSong == null || audioHandler == null) return;
+    if (currentSong == null || _handler == null) return;
     
     final song = currentSong!;
     final artworkPath = getCustomArtwork(song.id);
@@ -345,7 +396,7 @@ class MusicProvider extends ChangeNotifier {
       duration: _audioPlayer.duration,
     );
     
-    audioHandler!.updateMediaItem(mediaItem);
+    _handler!.updateMediaItem(mediaItem);
   }
 
   // ================= HIVE INIT =================
@@ -441,9 +492,50 @@ class MusicProvider extends ChangeNotifier {
     }
 
     _syncWithHive();
-
+  
     _isLoading = false;
     notifyListeners();
+    
+    autoDownloadArtwork();
+  }
+
+  Future<void> autoDownloadArtwork() async {
+    final connectivityResult = await Connectivity().checkConnectivity();
+    if (connectivityResult == ConnectivityResult.none) {
+      debugPrint('⏸️ No internet connection, skipping auto-download');
+      return;
+    }
+
+    final songsNeedingArt = _allSongs.where((song) => 
+      getCustomArtwork(song.id) == null
+    ).toList();
+
+    if (songsNeedingArt.isEmpty) {
+      debugPrint('✅ All songs have artwork');
+      return;
+    }
+
+    debugPrint('🎨 Auto-downloading artwork for ${songsNeedingArt.length} songs...');
+
+    int successCount = 0;
+    for (var i = 0; i < songsNeedingArt.length; i++) {
+      try {
+        final song = songsNeedingArt[i];
+        final query = '${song.title} ${song.artist}';
+        final results = await searchArtwork(query);
+        
+        if (results.isNotEmpty) {
+          await applyChosenArtwork(song.id, results.first);
+          successCount++;
+        }
+        
+        await Future.delayed(const Duration(milliseconds: 500));
+      } catch (e) {
+        debugPrint('Failed to download artwork: $e');
+      }
+    }
+
+    debugPrint('✅ Auto-downloaded $successCount/${songsNeedingArt.length} artworks');
   }
 
   Future<void> toggleLike(SongData song) async {
@@ -606,32 +698,33 @@ class MusicProvider extends ChangeNotifier {
     _currentPlaylist = sourceList;
     _currentIndex = index;
 
-    // Check if audio_service is available
-    if (audioHandler != null) {
-      // Use audio_service for background playback
+    debugPrint("🎵 playSong called - audioHandler status: ${_handler != null ? 'AVAILABLE' : 'NULL'}");
+    
+    if (_handler != null) {
       final mediaItems = sourceList.map((song) {
         final artworkPath = getCustomArtwork(song.id);
+        debugPrint("   Creating MediaItem for '${song.title}' - Artwork: ${artworkPath ?? 'NONE'}");
         return MediaItem(
           id: song.data,
           title: song.title,
           artist: song.artist.isEmpty ? 'Unknown Artist' : song.artist,
-          album: song.artist.isEmpty ? 'Unknown Album' : song.artist, // Use artist as album
+          album: song.artist.isEmpty ? 'Unknown Album' : song.artist,
           artUri: artworkPath != null ? Uri.file(artworkPath) : null,
         );
       }).toList();
 
       try {
-        await audioHandler!.playPlaylist(mediaItems, initialIndex: index);
+        await _handler!.playPlaylist(mediaItems, initialIndex: index);
         _isPlaying = true;
         debugPrint('✅ Playing via audio_service: ${mediaItems[index].title}');
+        debugPrint('   Initial song artwork URI: ${mediaItems[index].artUri}');
         notifyListeners();
       } catch (e) {
         debugPrint('❌ Error loading audio source via audio_service: $e');
-        // Fallback to direct playback
         _fallbackPlayback(sourceList, index);
       }
     } else {
-      // Fallback to direct just_audio playback
+      debugPrint('⚠️ audioHandler is NULL - using fallback playback');
       _fallbackPlayback(sourceList, index);
     }
   }
@@ -656,34 +749,33 @@ class MusicProvider extends ChangeNotifier {
   }
 
   void play() {
-    if (audioHandler != null) {
-      audioHandler!.play();
+    if (_handler != null) {
+      _handler!.play();
     } else {
       _audioPlayer.play();
     }
   }
 
   void pause() {
-    if (audioHandler != null) {
-      audioHandler!.pause();
+    if (_handler != null) {
+      _handler!.pause();
     } else {
       _audioPlayer.pause();
     }
   }
 
   void stop() {
-    if (audioHandler != null) {
-      audioHandler!.stop();
+    if (_handler != null) {
+      _handler!.stop();
     } else {
       _audioPlayer.stop();
     }
   }
 
   Future<void> skipToNext() async {
-    if (audioHandler != null) {
-      await audioHandler!.skipToNext();
-      // await audioHandler!.skipToNext(); // Removed duplicate
-      _currentIndex = audioHandler!.player.currentIndex ?? 0;
+    if (_handler != null) {
+      await _handler!.skipToNext();
+      _currentIndex = _handler!.player.currentIndex ?? 0;
     } else if (_audioPlayer.hasNext) {
       await _audioPlayer.seekToNext();
     }
@@ -691,10 +783,9 @@ class MusicProvider extends ChangeNotifier {
   }
 
   Future<void> skipToPrevious() async {
-    if (audioHandler != null) {
-      await audioHandler!.skipToPrevious();
-      // await audioHandler!.skipToPrevious(); // Removed duplicate
-      _currentIndex = audioHandler!.player.currentIndex ?? 0;
+    if (_handler != null) {
+      await _handler!.skipToPrevious();
+      _currentIndex = _handler!.player.currentIndex ?? 0;
     } else if (_audioPlayer.hasPrevious) {
       await _audioPlayer.seekToPrevious();
     }
@@ -702,8 +793,8 @@ class MusicProvider extends ChangeNotifier {
   }
 
   void seekTo(Duration position) {
-    if (audioHandler != null) {
-      audioHandler!.seek(position);
+    if (_handler != null) {
+      _handler!.seek(position);
     } else {
       _audioPlayer.seek(position);
     }
@@ -723,8 +814,8 @@ class MusicProvider extends ChangeNotifier {
 
   void toggleShuffle() {
     _isShuffleModeEnabled = !_isShuffleModeEnabled;
-    if (audioHandler != null) {
-      audioHandler!.player.setShuffleModeEnabled(
+    if (_handler != null) {
+      _handler!.player.setShuffleModeEnabled(
         _isShuffleModeEnabled,
       );
     } else {
@@ -740,8 +831,8 @@ class MusicProvider extends ChangeNotifier {
         ? LoopMode.one
         : LoopMode.off;
     
-    if (audioHandler != null) {
-      audioHandler!.player.setLoopMode(_loopMode);
+    if (_handler != null) {
+      _handler!.player.setLoopMode(_loopMode);
     } else {
       _audioPlayer.setLoopMode(_loopMode);
     }
