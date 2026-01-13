@@ -13,18 +13,15 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
       if (index != null && queue.value.isNotEmpty && index < queue.value.length) {
         final item = queue.value[index];
         
-        // Force Android to refresh artwork by recreating MediaItem with timestamp
-        final updatedItem = MediaItem(
-          id: item.id,
-          title: item.title,
-          artist: item.artist,
-          album: item.album,
-          artUri: item.artUri,
-          extras: {'timestamp': DateTime.now().millisecondsSinceEpoch},
-        );
+        // Update MediaItem
+        mediaItem.add(item);
         
-        mediaItem.add(updatedItem);
-        debugPrint('🎵 Notification updated: ${item.title} - Artwork: ${item.artUri != null ? "YES (${item.artUri})" : "NO"}');
+        // Force complete notification refresh by updating playback state
+        // This bypasses Android's aggressive image caching
+        await Future.delayed(const Duration(milliseconds: 50));
+        playbackState.add(playbackState.value);
+        
+        debugPrint('🎵 Notification refreshed: ${item.title}');
       }
     });
   }
