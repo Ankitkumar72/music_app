@@ -3,6 +3,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_service/audio_service.dart';
@@ -17,6 +18,7 @@ import 'audio_handler.dart';
 import '../main.dart';
 
 class MusicProvider extends ChangeNotifier {
+  static const platform = MethodChannel('com.example.music_player/notification');
   final OnAudioQuery _audioQuery = OnAudioQuery();
 
   // Helper to safely get the audio handler from the global variable
@@ -27,6 +29,16 @@ class MusicProvider extends ChangeNotifier {
   
   // Fallback player for when audio_service isn't initialized
   final AudioPlayer _fallbackPlayer = AudioPlayer();
+
+  MusicProvider() {
+    _init();
+  }
+
+  void _init() {
+    _setupPlayerListeners();
+    _setupMediaButtonHandler();
+    _initHive();
+  }
 
   // ================= SONG LISTS =================
   List<SongData> _songs = [];
@@ -352,15 +364,12 @@ class MusicProvider extends ChangeNotifier {
     return result;
   }
 
-  // ================= CONSTRUCTOR =================
-  MusicProvider() {
-    _initHive();
-    _setupPlayerListeners();
-  }
+
 
   void _setupPlayerListeners() {
     _audioPlayer.playingStream.listen((playing) {
       _isPlaying = playing;
+      _updateCustomNotification();
       notifyListeners();
     });
 
@@ -369,6 +378,7 @@ class MusicProvider extends ChangeNotifier {
         _currentIndex = index;
         _handleSongChange(index);
         _updateNotificationMetadata();
+        _updateCustomNotification();
         notifyListeners();
       }
     });
@@ -377,6 +387,7 @@ class MusicProvider extends ChangeNotifier {
       if (state == ProcessingState.completed) {
         _currentIndex = -1;
         _isPlaying = false;
+        _updateCustomNotification();
         notifyListeners();
       }
     });
@@ -718,6 +729,10 @@ class MusicProvider extends ChangeNotifier {
         _isPlaying = true;
         debugPrint('✅ Playing via audio_service: ${mediaItems[index].title}');
         debugPrint('   Initial song artwork URI: ${mediaItems[index].artUri}');
+        
+        // Update custom notification with fresh artwork
+        await _updateCustomNotification();
+        
         notifyListeners();
       } catch (e) {
         debugPrint('❌ Error loading audio source via audio_service: $e');
@@ -884,6 +899,49 @@ class MusicProvider extends ChangeNotifier {
     } catch (e) {
       debugPrint("Error setting custom artwork: $e");
     }
+  }
+
+
+  // ================= CUSTOM NOTIFICATION =================
+  Future<void> _updateCustomNotification() async {
+    if (currentSong == null) return;
+    
+    final artPath = getCustomArtwork(currentSong!.id);
+    debugPrint("🔔 Updating Custom Notification: ${currentSong!.title}");
+    debugPrint("   Artwork Path: $artPath");
+    
+    try {
+      await platform.invokeMethod('showNotification', {
+        'title': currentSong!.title,
+        'artist': currentSong!.artist.isEmpty ? 'Unknown Artist' : currentSong!.artist,
+        'artworkPath': artPath,
+        'isPlaying': _isPlaying,
+      });
+    } catch (e) {
+      debugPrint('Failed to update custom notification: $e');
+    }
+  }
+  
+  Future<void> _setupMediaButtonHandler() async {
+    platform.setMethodCallHandler((call) async {
+      if (call.method == 'onMediaButton') {
+        final action = call.arguments['action'] as String?;
+        switch (action) {
+          case 'play':
+            play();
+            break;
+          case 'pause':
+            pause();
+            break;
+          case 'next':
+            await skipToNext();
+            break;
+          case 'previous':
+            await skipToPrevious();
+            break;
+        }
+      }
+    });
   }
 
   @override

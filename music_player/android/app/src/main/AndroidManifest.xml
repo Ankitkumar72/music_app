@@ -58,6 +58,15 @@
                 </intent-filter>
             </receiver>
             
+            <!-- Custom media button receiver for notification controls -->
+            <receiver 
+                android:name=".MediaButtonReceiver"
+                android:exported="false">
+                <intent-filter>
+                    <action android:name="com.example.music_player.MEDIA_ACTION" />
+                </intent-filter>
+            </receiver>
+            
             <meta-data
                 android:name="flutterEmbedding"
                 android:value="2" />

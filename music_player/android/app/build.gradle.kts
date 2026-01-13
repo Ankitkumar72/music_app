@@ -75,4 +75,5 @@ flutter {
 
 dependencies {
     implementation("androidx.multidex:multidex:2.0.1")
+    implementation("androidx.media:media:1.6.0")
 }
