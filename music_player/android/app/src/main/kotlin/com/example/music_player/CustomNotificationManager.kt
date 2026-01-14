@@ -1,6 +1,5 @@
 package com.example.music_player
 
-import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -9,19 +8,26 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Build
+import android.support.v4.media.session.MediaSessionCompat
 import androidx.core.app.NotificationCompat
 import androidx.media.app.NotificationCompat.MediaStyle
 import java.io.File
 
 class CustomNotificationManager(private val context: Context) {
     
-    // Match AudioService's Channel ID and Notification ID to ovewrite the default notification
     private val CHANNEL_ID = "com.example.music_player.channel.audio"
-    private val NOTIFICATION_ID = 1124 // Default AudioService notification ID
+    private val CUSTOM_NOTIFICATION_ID = 1124
     private val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    
+    private var sessionToken: MediaSessionCompat.Token? = null
     
     init {
         createNotificationChannel()
+    }
+    
+    fun setMediaSessionToken(token: MediaSessionCompat.Token) {
+        this.sessionToken = token
+        android.util.Log.d("CustomNotification", "MediaSession token set")
     }
     
     private fun createNotificationChannel() {
@@ -44,9 +50,25 @@ class CustomNotificationManager(private val context: Context) {
         artworkPath: String?,
         isPlaying: Boolean
     ) {
-        android.util.Log.d("CustomNotification", "Showing notification: $title, Art: $artworkPath")
+        android.util.Log.d("CustomNotification", "Showing notification: $title, Art: $artworkPath, Token: ${sessionToken != null}")
         val artwork = loadArtwork(artworkPath)
-        android.util.Log.d("CustomNotification", "Artwork loaded: ${artwork != null}")
+        
+        // Create media actions
+        val previousAction = createMediaAction("previous", android.R.drawable.ic_media_previous)
+        val playPauseAction = if (isPlaying) {
+            createMediaAction("pause", android.R.drawable.ic_media_pause)
+        } else {
+            createMediaAction("play", android.R.drawable.ic_media_play)
+        }
+        val nextAction = createMediaAction("next", android.R.drawable.ic_media_next)
+        
+        val mediaStyle = MediaStyle()
+            .setShowActionsInCompactView(0, 1, 2)
+        
+        // CRITICAL: Set the MediaSession token
+        if (sessionToken != null) {
+            mediaStyle.setMediaSession(sessionToken)
+        }
         
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
@@ -54,32 +76,56 @@ class CustomNotificationManager(private val context: Context) {
             .setContentText(artist)
             .setLargeIcon(artwork)
             .setOnlyAlertOnce(true)
-            .setStyle(MediaStyle()
-                .setShowActionsInCompactView(0, 1, 2))
-            .addAction(createAction("previous", android.R.drawable.ic_media_previous))
-            .addAction(
-                if (isPlaying) 
-                    createAction("pause", android.R.drawable.ic_media_pause)
-                else 
-                    createAction("play", android.R.drawable.ic_media_play)
-            )
-            .addAction(createAction("next", android.R.drawable.ic_media_next))
+            .setSilent(true)
+            .setStyle(mediaStyle)
+            .addAction(previousAction)
+            .addAction(playPauseAction)
+            .addAction(nextAction)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setOngoing(isPlaying) // Make non-dismissible only when playing
+            .setOngoing(true)
+            .setAutoCancel(false)
             .build()
         
-        notificationManager.notify(NOTIFICATION_ID, notification)
+        // Cancel the existing notification first to force Android to refresh the artwork
+        // This prevents Android from caching the old album art
+        notificationManager.cancel(CUSTOM_NOTIFICATION_ID)
+        
+        // Post the new notification immediately after canceling
+        notificationManager.notify(CUSTOM_NOTIFICATION_ID, notification)
+        android.util.Log.d("CustomNotification", "Notification posted (refreshed)")
+    }
+    
+    private fun createMediaAction(action: String, icon: Int): NotificationCompat.Action {
+        val intent = Intent("com.example.music_player.MEDIA_CONTROL").apply {
+            setPackage(context.packageName)
+            putExtra("action", action)
+        }
+        
+        val requestCode = when(action) {
+            "previous" -> 101
+            "play"     -> 102
+            "pause"    -> 103
+            "next"     -> 104
+            else       -> action.hashCode()
+        }
+        
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        
+        android.util.Log.d("CustomNotification", "Created action: $action with requestCode: $requestCode")
+        return NotificationCompat.Action.Builder(icon, action, pendingIntent).build()
     }
     
     private fun loadArtwork(path: String?): Bitmap? {
         return try {
             if (path != null && File(path).exists()) {
-                val bitmap = BitmapFactory.decodeFile(path)
-                android.util.Log.d("CustomNotification", "Decoded bitmap size: ${bitmap?.byteCount}")
-                bitmap
+                BitmapFactory.decodeFile(path)
             } else {
-                android.util.Log.d("CustomNotification", "Artwork file not found or path null")
                 null
             }
         } catch (e: Exception) {
@@ -88,22 +134,7 @@ class CustomNotificationManager(private val context: Context) {
         }
     }
     
-    private fun createAction(action: String, icon: Int): NotificationCompat.Action {
-        val intent = Intent("com.example.music_player.MEDIA_ACTION").apply {
-            putExtra("action", action)
-        }
-        
-        val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            action.hashCode(),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        
-        return NotificationCompat.Action.Builder(icon, action, pendingIntent).build()
-    }
-    
     fun cancelNotification() {
-        notificationManager.cancel(NOTIFICATION_ID)
+        notificationManager.cancel(CUSTOM_NOTIFICATION_ID)
     }
 }

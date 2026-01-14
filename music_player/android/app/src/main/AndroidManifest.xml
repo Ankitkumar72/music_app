@@ -58,12 +58,17 @@
                 </intent-filter>
             </receiver>
             
-            <!-- Custom media button receiver for notification controls -->
-            <receiver 
-                android:name=".MediaButtonReceiver"
+            <!-- Custom MediaService for managing MediaSession -->
+            <service
+                android:name=".CustomMediaService"
+                android:exported="false" />
+
+            <!-- Media Control Receiver for notification button clicks -->
+            <receiver
+                android:name=".MediaControlReceiver"
                 android:exported="false">
                 <intent-filter>
-                    <action android:name="com.example.music_player.MEDIA_ACTION" />
+                    <action android:name="com.example.music_player.MEDIA_CONTROL" />
                 </intent-filter>
             </receiver>
             

@@ -377,7 +377,7 @@ class MusicProvider extends ChangeNotifier {
       if (index != null && _currentIndex != index) {
         _currentIndex = index;
         _handleSongChange(index);
-        _updateNotificationMetadata();
+        _updateNotificationMetadata(); // Restored to ensure AudioService has data
         _updateCustomNotification();
         notifyListeners();
       }
@@ -904,11 +904,16 @@ class MusicProvider extends ChangeNotifier {
 
   // ================= CUSTOM NOTIFICATION =================
   Future<void> _updateCustomNotification() async {
-    if (currentSong == null) return;
+    if (currentSong == null) {
+      debugPrint("🔔 Cannot update notification: currentSong is null");
+      return;
+    }
     
     final artPath = getCustomArtwork(currentSong!.id);
     debugPrint("🔔 Updating Custom Notification: ${currentSong!.title}");
+    debugPrint("   Song ID: ${currentSong!.id}");
     debugPrint("   Artwork Path: $artPath");
+    debugPrint("   Is Playing: $_isPlaying");
     
     try {
       await platform.invokeMethod('showNotification', {
@@ -917,8 +922,9 @@ class MusicProvider extends ChangeNotifier {
         'artworkPath': artPath,
         'isPlaying': _isPlaying,
       });
+      debugPrint("✅ Notification update sent successfully");
     } catch (e) {
-      debugPrint('Failed to update custom notification: $e');
+      debugPrint('❌ Failed to update custom notification: $e');
     }
   }
   
@@ -926,6 +932,7 @@ class MusicProvider extends ChangeNotifier {
     platform.setMethodCallHandler((call) async {
       if (call.method == 'onMediaButton') {
         final action = call.arguments['action'] as String?;
+        debugPrint("🎵 Media button action received: $action");
         switch (action) {
           case 'play':
             play();

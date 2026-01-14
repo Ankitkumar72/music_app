@@ -4,30 +4,34 @@ import 'package:flutter/foundation.dart';
 
 class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   final AudioPlayer _player = AudioPlayer();
-  
+
   AudioPlayerHandler() {
-    _player.playbackEventStream.map(_transformEvent).pipe(playbackState);
-    
-    // Listen for index changes to update the current media item in the notification
-    _player.currentIndexStream.listen((index) async {
-      if (index != null && queue.value.isNotEmpty && index < queue.value.length) {
-        final item = queue.value[index];
-        
-        // Update MediaItem
-        mediaItem.add(item);
-        
-        // Force complete notification refresh by updating playback state
-        // This bypasses Android's aggressive image caching
-        await Future.delayed(const Duration(milliseconds: 50));
-        playbackState.add(playbackState.value);
-        
-        debugPrint('🎵 Notification refreshed: ${item.title}');
+    // 1. Sync playback state
+    _player.playbackEventStream.listen(
+      (event) => playbackState.add(_transformEvent(event)),
+      onError: (Object e, StackTrace st) {
+        debugPrint('Playback error: $e');
+        playbackState.add(playbackState.value.copyWith(
+          processingState: AudioProcessingState.error,
+        ));
+      },
+    );
+
+    // 2. Listen to track changes via sequenceStateStream
+    // This handles natural track completion, manual skips, and queue jumps
+    _player.sequenceStateStream.listen((state) {
+      if (state?.currentIndex != null) {
+        final index = state!.currentIndex!;
+        if (index < queue.value.length) {
+          mediaItem.add(queue.value[index]);
+        }
       }
     });
   }
 
   PlaybackState _transformEvent(PlaybackEvent event) {
     return PlaybackState(
+      // Keep controls for proper MediaSession integration with MediaButtonReceiver
       controls: [
         MediaControl.skipToPrevious,
         if (_player.playing) MediaControl.pause else MediaControl.play,
@@ -38,7 +42,7 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
         MediaAction.seekForward,
         MediaAction.seekBackward,
       },
-      androidCompactActionIndices: const [0, 1, 2], // Previous, Play/Pause, Next
+      androidCompactActionIndices: const [0, 1, 2],
       processingState: const {
         ProcessingState.idle: AudioProcessingState.idle,
         ProcessingState.loading: AudioProcessingState.loading,
@@ -56,23 +60,22 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
 
   Future<void> playPlaylist(List<MediaItem> items, {int initialIndex = 0}) async {
     queue.add(items);
-    
+
     final audioSources = items.map((item) => AudioSource.uri(
       Uri.parse(item.id),
       tag: item,
     )).toList();
-    
-    // Use setAudioSources (plural) instead of deprecated ConcatenatingAudioSource
-    await _player.setAudioSources(audioSources, initialIndex: initialIndex);
-    
-    if (items.isNotEmpty && initialIndex < items.length) {
-      mediaItem.add(items[initialIndex]);
-    }
+
+    // Set source - the sequenceStateStream listener added in constructor
+    // will automatically update mediaItem.add() once the player loads.
+    await _player.setAudioSource(
+      ConcatenatingAudioSource(children: audioSources),
+      initialIndex: initialIndex,
+    );
     
     play();
   }
 
-  // FIX: Changed return type to Future<void> to match the base class requirement
   @override
   Future<void> updateMediaItem(MediaItem item) async {
     mediaItem.add(item);
@@ -89,31 +92,32 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
 
   @override
   Future<void> skipToNext() async {
-    // Check if there's a next track before attempting to skip
     if (_player.hasNext) {
       await _player.seekToNext();
-      // Auto-play the next song even if current was paused
-      if (!_player.playing) {
-        await _player.play();
-      }
+      if (!_player.playing) await _player.play();
     }
   }
 
   @override
   Future<void> skipToPrevious() async {
-    // Check if there's a previous track before attempting to skip
     if (_player.hasPrevious) {
       await _player.seekToPrevious();
-      // Auto-play the previous song even if current was paused
-      if (!_player.playing) {
-        await _player.play();
-      }
+      if (!_player.playing) await _player.play();
+    }
+  }
+
+  @override
+  Future<void> skipToQueueItem(int index) async {
+    if (index >= 0 && index < queue.value.length) {
+      await _player.seek(Duration.zero, index: index);
+      if (!_player.playing) await _player.play();
     }
   }
 
   @override
   Future<void> stop() async {
     await _player.stop();
+    await _player.dispose(); // Proper disposal of resources
     await super.stop();
   }
 
