@@ -128,6 +128,17 @@ class MusicProvider extends ChangeNotifier {
   String _librarySearchQuery = '';
   List<SongData> get librarySearchResults => _librarySearchResults;
   String get librarySearchQuery => _librarySearchQuery;
+  
+  // Search history (limited to 6)
+  List<int> _searchHistory = [];
+  static const int _maxSearchHistory = 6;
+  
+  List<SongData> get searchHistory {
+    return _searchHistory
+        .map((id) => _allSongs.firstWhere((s) => s.id == id, orElse: () => _allSongs.isNotEmpty ? _allSongs.first : SongData(id: 0, title: '', artist: '', data: '')))
+        .where((s) => s.id != 0)
+        .toList();
+  }
 
   // ================= GROUPING GETTERS =================
   
@@ -483,6 +494,8 @@ class MusicProvider extends ChangeNotifier {
           ..addAll(matchedSongs);
       }
     }
+    // Load search history
+    _loadSearchHistoryFromHive();
     notifyListeners();
   }
 
@@ -860,8 +873,37 @@ class MusicProvider extends ChangeNotifier {
     
     _currentPlaylist = newPlaylist;
     
-    // Don't reload audio source - just update internal tracking
-    // The AudioPlayer will naturally follow the playlist
+    // Actually update the audio player's source
+    try {
+      final currentPosition = _audioPlayer.position;
+      final wasPlaying = _isPlaying;
+      
+      List<AudioSource> audioSources = newPlaylist.map((s) {
+        return AudioSource.file(s.data);
+      }).toList();
+      
+      // Find the new index of the current song
+      final newIndex = _currentIndex >= 0 && _currentIndex < _contextSongs.length
+          ? newPlaylist.indexWhere((s) => s.id == _contextSongs[_currentIndex].id)
+          : 0;
+      
+      await _audioPlayer.setAudioSource(
+        ConcatenatingAudioSource(children: audioSources),
+        initialIndex: newIndex >= 0 ? newIndex : 0,
+        initialPosition: currentPosition,
+      );
+      
+      // Update current index to reflect new position
+      _currentIndex = newIndex >= 0 ? newIndex : 0;
+      
+      if (wasPlaying) {
+        await _audioPlayer.play();
+      }
+      
+      debugPrint("🔄 Queue rebuilt: ${newPlaylist.length} songs, current index: $_currentIndex");
+    } catch (e) {
+      debugPrint("❌ Error rebuilding audio source: $e");
+    }
   }
 
   // ================= PLAYBACK =================
@@ -1002,6 +1044,48 @@ class MusicProvider extends ChangeNotifier {
       }).toList();
     }
     notifyListeners();
+  }
+
+  /// Add a song to search history (called when playing from search results)
+  void addToSearchHistory(SongData song) {
+    // Remove if already exists (will be re-added at the beginning)
+    _searchHistory.remove(song.id);
+    
+    // Add to the beginning
+    _searchHistory.insert(0, song.id);
+    
+    // Limit to max 6 items
+    if (_searchHistory.length > _maxSearchHistory) {
+      _searchHistory = _searchHistory.sublist(0, _maxSearchHistory);
+    }
+    
+    // Persist to Hive
+    _saveSearchHistoryToHive();
+    notifyListeners();
+  }
+
+  /// Clear all search history
+  void clearSearchHistory() {
+    _searchHistory.clear();
+    _saveSearchHistoryToHive();
+    notifyListeners();
+  }
+
+  /// Save search history to Hive
+  void _saveSearchHistoryToHive() {
+    if (_isHiveReady) {
+      _statsBox.put('searchHistory', _searchHistory);
+    }
+  }
+
+  /// Load search history from Hive
+  void _loadSearchHistoryFromHive() {
+    if (_isHiveReady) {
+      final saved = _statsBox.get('searchHistory');
+      if (saved != null && saved is List) {
+        _searchHistory = List<int>.from(saved);
+      }
+    }
   }
 
   // ================= CATEGORY & MISC =================

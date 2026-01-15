@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:on_audio_query/on_audio_query.dart';
+import 'dart:io';
 
 import '../logic/Models/song_data.dart';
 
@@ -47,9 +49,13 @@ class PlaylistDetailScreen extends StatelessWidget {
                       final song = songs[index];
 
                       return ListTile(
-                        leading: const Icon(
-                          Icons.music_note,
-                          color: Colors.white54,
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: SizedBox(
+                            width: 50,
+                            height: 50,
+                            child: _buildArtwork(song, musicProvider),
+                          ),
                         ),
                         title: Text(
                           song.title,
@@ -80,6 +86,55 @@ class PlaylistDetailScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+  
+  Widget _buildArtwork(SongData song, MusicProvider provider) {
+    // Check for custom downloaded artwork first
+    final customPath = provider.getCustomArtwork(song.id);
+    if (customPath != null && File(customPath).existsSync()) {
+      return Image.file(
+        File(customPath),
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _buildDefaultArtwork(song.id),
+      );
+    }
+    
+    // Fall back to embedded artwork using QueryArtworkWidget
+    return QueryArtworkWidget(
+      id: song.id,
+      type: ArtworkType.AUDIO,
+      artworkFit: BoxFit.cover,
+      artworkBorder: BorderRadius.zero,
+      nullArtworkWidget: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Colors.purple.withOpacity(0.6),
+              Colors.blue.withOpacity(0.6),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: const Icon(Icons.music_note, color: Colors.white54, size: 24),
+      ),
+    );
+  }
+  
+  Widget _buildDefaultArtwork(int songId) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.purple.withOpacity(0.6),
+            Colors.blue.withOpacity(0.6),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: const Icon(Icons.music_note, color: Colors.white54, size: 24),
     );
   }
 }

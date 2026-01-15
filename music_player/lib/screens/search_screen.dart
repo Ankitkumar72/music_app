@@ -141,29 +141,85 @@ class _SearchScreenState extends State<SearchScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              TextButton(
-                onPressed: () {},
-                child: const Text(
-                  "CLEAR ALL",
-                  style: TextStyle(
-                    color: Color(0xFF6332F6),
-                    fontWeight: FontWeight.bold,
+              if (musicProvider.searchHistory.isNotEmpty)
+                TextButton(
+                  onPressed: () => musicProvider.clearSearchHistory(),
+                  child: const Text(
+                    "CLEAR ALL",
+                    style: TextStyle(
+                      color: Color(0xFF6332F6),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
 
-          // --- No recent searches yet ---
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16.0),
-            child: Center(
-              child: Text(
-                "No recent searches",
-                style: TextStyle(color: Colors.white54, fontSize: 14),
+          // --- Recent searches list ---
+          if (musicProvider.searchHistory.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16.0),
+              child: Center(
+                child: Text(
+                  "No recent searches",
+                  style: TextStyle(color: Colors.white54, fontSize: 14),
+                ),
               ),
-            ),
-          ),
+            )
+          else
+            ...musicProvider.searchHistory.map((song) {
+              final customPath = musicProvider.getCustomArtwork(song.id);
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    width: 45,
+                    height: 45,
+                    child: customPath != null && File(customPath).existsSync()
+                        ? Image.file(File(customPath), fit: BoxFit.cover)
+                        : QueryArtworkWidget(
+                            id: song.id,
+                            type: ArtworkType.AUDIO,
+                            artworkFit: BoxFit.cover,
+                            nullArtworkWidget: Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.purple.withOpacity(0.6),
+                                    Colors.blue.withOpacity(0.6),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                              ),
+                              child: const Icon(Icons.music_note, color: Colors.white54),
+                            ),
+                          ),
+                  ),
+                ),
+                title: Text(
+                  song.title,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  song.artist,
+                  style: const TextStyle(color: Colors.white54),
+                  maxLines: 1,
+                ),
+                trailing: const Icon(Icons.history, color: Colors.white24, size: 18),
+                onTap: () {
+                  // Play and add to history again (moves to top)
+                  final index = musicProvider.allSongs.indexWhere((s) => s.id == song.id);
+                  if (index >= 0) {
+                    musicProvider.addToSearchHistory(song);
+                    musicProvider.playSong(index, contextName: "Search");
+                  }
+                },
+              );
+            }),
 
           const SizedBox(height: 24),
 
@@ -226,6 +282,9 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             ],
           ),
+          
+          // Bottom padding to scroll above mini player
+          SizedBox(height: musicProvider.currentSong != null ? 120 : 20),
         ],
       ),
     );
@@ -346,8 +405,9 @@ class _SearchScreenState extends State<SearchScreen> {
             overflow: TextOverflow.ellipsis,
           ),
           onTap: () {
-            // Play the selected song from the search results list
-            provider.playSong(index, customList: results);
+            // Add to search history and play
+            provider.addToSearchHistory(song);
+            provider.playSong(index, customList: results, contextName: "Search");
           },
         );
       },
