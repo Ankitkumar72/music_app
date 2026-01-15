@@ -41,6 +41,7 @@ class PlaylistDetailScreen extends StatelessWidget {
               : MiniPlayerSafeScroll(
                   child: ListView.builder(
                     physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.only(bottom: 100),
                     itemCount: songs.length,
                     itemBuilder: (context, index) {
                       final song = songs[index];
@@ -64,7 +65,7 @@ class PlaylistDetailScreen extends StatelessWidget {
                         ),
                         onTap: () {
                           // 🎵 PLAY FROM THIS PLAYLIST
-                          musicProvider.playSong(index, customList: songs);
+                          musicProvider.playSong(index, customList: songs, contextName: playlistName);
                         },
                       );
                     },

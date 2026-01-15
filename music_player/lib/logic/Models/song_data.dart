@@ -15,10 +15,16 @@ class SongData extends HiveObject {
   final String data;
 
   @HiveField(3)
-  final String artist; // REQUIRED: This fixes the 'artist' getter error
+  final String artist;
 
   @HiveField(4)
   final String? albumArtUrl;
+
+  @HiveField(5)
+  final String album;
+
+  @HiveField(6)
+  final int? duration;
 
   SongData({
     required this.id,
@@ -26,10 +32,12 @@ class SongData extends HiveObject {
     required this.data,
     required this.artist,
     this.albumArtUrl,
+    this.album = 'Unknown Album',
+    this.duration,
   });
 
   // REQUIRED: This fixes the 'fromFile' method error in music_provider.dart
-  factory SongData.fromFile({required int id, required String filePath}) {
+  factory SongData.fromFile({required int id, required String filePath, int? duration, String? album}) {
     String rawFileName = filePath.split('/').last.split('.').first;
     final metadata = MetadataParser.parse(rawFileName);
 
@@ -39,6 +47,8 @@ class SongData extends HiveObject {
       artist: metadata['artist']!,
       data: filePath,
       albumArtUrl: null,
+      album: album ?? 'Unknown Album',
+      duration: duration,
     );
   }
 }

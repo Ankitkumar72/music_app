@@ -10,20 +10,34 @@ void showSongMenu(BuildContext context, SongData song) {
   showModalBottomSheet(
     context: context,
     backgroundColor: const Color(0xFF1A1A24),
+    isScrollControlled: true,
+    enableDrag: true,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: (ctx) => _SongMenuContent(song: song, parentContext: context),
+    builder: (ctx) => DraggableScrollableSheet(
+      initialChildSize: 0.55,
+      minChildSize: 0.3,
+      maxChildSize: 0.85,
+      expand: false,
+      builder: (context, scrollController) => _SongMenuContent(
+        song: song, 
+        parentContext: context,
+        scrollController: scrollController,
+      ),
+    ),
   );
 }
 
 class _SongMenuContent extends StatelessWidget {
   final SongData song;
   final BuildContext parentContext;
+  final ScrollController scrollController;
 
   const _SongMenuContent({
     required this.song,
     required this.parentContext,
+    required this.scrollController,
   });
 
   void _showNotification(BuildContext context, String message, IconData icon) {
@@ -251,114 +265,141 @@ class _SongMenuContent extends StatelessWidget {
     final provider = context.watch<MusicProvider>();
     final isLiked = provider.isLiked(song);
 
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Drag handle
-          Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.white24,
-              borderRadius: BorderRadius.circular(2),
+    return SingleChildScrollView(
+      controller: scrollController,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Drag handle
+            Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-          ),
-          
-          // Header with song info
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            child: Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: Colors.white10,
-                    borderRadius: BorderRadius.circular(8),
+            
+            // Header with song info
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white10,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.music_note, color: Colors.white54, size: 24),
                   ),
-                  child: const Icon(Icons.music_note, color: Colors.white54, size: 24),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        song.title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          song.title,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        song.artist,
-                        style: const TextStyle(
-                          color: Colors.white54,
-                          fontSize: 13,
+                        Text(
+                          song.artist,
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 13,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const Divider(color: Colors.white12, height: 24),
+            const Divider(color: Colors.white12, height: 24),
 
-          // Menu Options
-          _buildMenuOption(
-            context,
-            icon: isLiked ? Icons.favorite : Icons.favorite_border,
-            iconColor: isLiked ? Colors.red : const Color(0xFF6332F6),
-            title: isLiked ? 'Remove from Liked' : 'Add to Liked',
-            subtitle: 'Manage your favorites',
-            onTap: () {
-              provider.toggleLike(song);
-              Navigator.pop(context);
-              _showNotification(
-                context,
-                isLiked ? 'Removed from Liked Songs' : 'Added to Liked Songs',
-                isLiked ? Icons.favorite_border : Icons.favorite,
-              );
-            },
-          ),
-          _buildMenuOption(
-            context,
-            icon: Icons.playlist_add,
-            title: 'Add to Playlist',
-            subtitle: 'Save to your playlists',
-            onTap: () => _showPlaylistSelector(context),
-          ),
-          _buildMenuOption(
-            context,
-            icon: Icons.delete_outline,
-            iconColor: Colors.red.shade300,
-            title: 'Delete from Library',
-            subtitle: 'Hide this song permanently',
-            onTap: () {
-              Navigator.pop(context);
-              _showDeleteConfirmation(parentContext, provider, song);
-            },
-          ),
-          _buildMenuOption(
-            context,
-            icon: Icons.info_outline,
-            title: 'Song Details',
-            subtitle: 'View metadata information',
-            onTap: () {
-              Navigator.pop(context);
-              _showSongDetails(parentContext, song);
-            },
-          ),
-        ],
+            // Menu Options
+            _buildMenuOption(
+              context,
+              icon: isLiked ? Icons.favorite : Icons.favorite_border,
+              iconColor: isLiked ? Colors.red : const Color(0xFF6332F6),
+              title: isLiked ? 'Remove from Liked' : 'Add to Liked',
+              subtitle: 'Manage your favorites',
+              onTap: () {
+                provider.toggleLike(song);
+                Navigator.pop(context);
+                _showNotification(
+                  context,
+                  isLiked ? 'Removed from Liked Songs' : 'Added to Liked Songs',
+                  isLiked ? Icons.favorite_border : Icons.favorite,
+                );
+              },
+            ),
+            _buildMenuOption(
+              context,
+              icon: Icons.playlist_play,
+              title: 'Play Next',
+              subtitle: 'Play right after current song',
+              onTap: () {
+                provider.playNext(song);
+                Navigator.pop(context);
+                _showNotification(context, 'Playing next', Icons.playlist_play);
+              },
+            ),
+            _buildMenuOption(
+              context,
+              icon: Icons.queue_music,
+              title: 'Add to Queue',
+              subtitle: 'Add to the end of queue',
+              onTap: () {
+                provider.addToQueue(song);
+                Navigator.pop(context);
+                _showNotification(context, 'Added to queue', Icons.queue_music);
+              },
+            ),
+            _buildMenuOption(
+              context,
+              icon: Icons.playlist_add,
+              title: 'Add to Playlist',
+              subtitle: 'Save to your playlists',
+              onTap: () => _showPlaylistSelector(context),
+            ),
+            _buildMenuOption(
+              context,
+              icon: Icons.delete_outline,
+              iconColor: Colors.red.shade300,
+              title: 'Delete from Library',
+              subtitle: 'Hide this song permanently',
+              onTap: () {
+                Navigator.pop(context);
+                _showDeleteConfirmation(parentContext, provider, song);
+              },
+            ),
+            _buildMenuOption(
+              context,
+              icon: Icons.info_outline,
+              title: 'Song Details',
+              subtitle: 'View metadata information',
+              onTap: () {
+                Navigator.pop(context);
+                _showSongDetails(parentContext, song);
+              },
+            ),
+            // Add bottom padding for safe area
+            const SizedBox(height: 20),
+          ],
+        ),
       ),
     );
   }

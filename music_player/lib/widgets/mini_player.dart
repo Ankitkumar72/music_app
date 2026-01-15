@@ -269,7 +269,7 @@ class _MiniPlayerState extends State<MiniPlayer> {
                       ),
                     ),
                     IconButton(
-                      onPressed: musicProvider.playNext,
+                      onPressed: musicProvider.skipToNext,
                       icon: const Icon(Icons.skip_next, color: Colors.white),
                     ),
                   ],

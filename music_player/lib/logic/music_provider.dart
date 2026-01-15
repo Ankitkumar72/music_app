@@ -69,6 +69,12 @@ class MusicProvider extends ChangeNotifier {
   final List<SongData> _likedSongs = [];
   final Map<String, List<SongData>> _playlists = {"Liked": []};
 
+  // ================= QUEUE SYSTEM =================
+  String _playbackContextName = "Library";      // Current context name
+  List<SongData> _contextSongs = [];            // Songs from original context
+  List<SongData> _playNextQueue = [];           // Songs to play immediately after current
+  List<SongData> _addedToQueue = [];            // Songs to play after context songs
+
   // ================= SYNC DATA =================
   Map<int, int> _playCounts = {};
   List<int> _recentIds = [];
@@ -102,6 +108,20 @@ class MusicProvider extends ChangeNotifier {
   List<String> get playlistNames => _playlists.keys.toList();
   String get activeCategory => _activeCategory;
   List<SongData> get searchResults => _searchResults;
+  
+  // Queue getters
+  String get playbackContextName => _playbackContextName;
+  List<SongData> get playNextQueue => List.unmodifiable(_playNextQueue);
+  List<SongData> get addedToQueue => List.unmodifiable(_addedToQueue);
+  List<SongData> get contextSongs => List.unmodifiable(_contextSongs);
+  
+  /// Returns the full queue: remaining context songs + queued songs
+  List<SongData> get fullQueue {
+    final remaining = _currentIndex >= 0 && _currentIndex < _currentPlaylist.length
+        ? _currentPlaylist.sublist(_currentIndex + 1)
+        : <SongData>[];
+    return [..._playNextQueue, ...remaining, ..._addedToQueue];
+  }
   
   // Library search results
   List<SongData> _librarySearchResults = [];
@@ -501,7 +521,12 @@ class MusicProvider extends ChangeNotifier {
       );
 
       _songs = queriedSongs.map((s) {
-        return SongData.fromFile(id: s.id, filePath: s.data);
+        return SongData.fromFile(
+          id: s.id, 
+          filePath: s.data,
+          duration: s.duration,
+          album: s.album,
+        );
       }).toList();
 
       _songs = _songs.where((s) => File(s.data).existsSync()).toList();
@@ -715,17 +740,146 @@ class MusicProvider extends ChangeNotifier {
     await _playlistBox.put(playlistName, playlistData);
   }
 
+  // ================= QUEUE =================
+  
+  /// Add song to play immediately after the current song
+  void playNext(SongData song) {
+    // Avoid duplicates in queue
+    if (_playNextQueue.any((s) => s.id == song.id) ||
+        _addedToQueue.any((s) => s.id == song.id)) {
+      return;
+    }
+    _playNextQueue.add(song);
+    _rebuildAudioSource();
+    notifyListeners();
+    debugPrint("▶️ Play Next: ${song.title}");
+  }
+  
+  /// Add song to the end of the queue
+  void addToQueue(SongData song) {
+    // Avoid duplicates in queue
+    if (_playNextQueue.any((s) => s.id == song.id) ||
+        _addedToQueue.any((s) => s.id == song.id)) {
+      return;
+    }
+    _addedToQueue.add(song);
+    _rebuildAudioSource();
+    notifyListeners();
+    debugPrint("➕ Added to Queue: ${song.title}");
+  }
+  
+  /// Clear all queued songs
+  void clearQueue() {
+    _playNextQueue.clear();
+    _addedToQueue.clear();
+    _rebuildAudioSource();
+    notifyListeners();
+  }
+  
+  /// Play a song from the queue - moves it to play immediately without clearing queue
+  Future<void> playFromQueue(SongData song) async {
+    // Remove from playNext queue if present
+    _playNextQueue.removeWhere((s) => s.id == song.id);
+    
+    // Remove from addedToQueue if present
+    _addedToQueue.removeWhere((s) => s.id == song.id);
+    
+    // Check if it's in context songs
+    final contextIndex = _contextSongs.indexWhere((s) => s.id == song.id);
+    
+    if (contextIndex >= 0) {
+      // It's a context song - just update the current index
+      _currentIndex = contextIndex;
+      
+      // Rebuild the playlist with proper order
+      final beforeCurrent = _contextSongs.sublist(0, contextIndex);
+      final current = [_contextSongs[contextIndex]];
+      final afterCurrent = contextIndex < _contextSongs.length - 1
+          ? _contextSongs.sublist(contextIndex + 1)
+          : <SongData>[];
+      
+      _currentPlaylist = [
+        ...beforeCurrent,
+        ...current,
+        ..._playNextQueue,
+        ...afterCurrent,
+        ..._addedToQueue,
+      ];
+    } else {
+      // It's a manually queued song - add to play next and play
+      _playNextQueue.insert(0, song);
+      _rebuildAudioSource();
+    }
+    
+    // Play the song
+    try {
+      List<AudioSource> audioSources = _currentPlaylist.map((s) {
+        return AudioSource.file(s.data);
+      }).toList();
+      
+      await _audioPlayer.setAudioSource(
+        ConcatenatingAudioSource(children: audioSources),
+        initialIndex: _currentIndex,
+      );
+      await _audioPlayer.play();
+      notifyListeners();
+      debugPrint("🎵 Playing from queue: ${song.title}");
+    } catch (e) {
+      debugPrint('❌ Error playing from queue: $e');
+    }
+  }
+  
+  /// Rebuild audio source to reflect queue changes
+  Future<void> _rebuildAudioSource() async {
+    if (_contextSongs.isEmpty) return;
+    
+    // Build the full playback order:
+    // 1. Songs before current (already played)
+    // 2. Current song
+    // 3. Play Next queue
+    // 4. Remaining context songs
+    // 5. Added to Queue
+    
+    final beforeCurrent = _currentIndex > 0 
+        ? _contextSongs.sublist(0, _currentIndex) 
+        : <SongData>[];
+    final current = _currentIndex >= 0 && _currentIndex < _contextSongs.length
+        ? [_contextSongs[_currentIndex]]
+        : <SongData>[];
+    final afterCurrent = _currentIndex >= 0 && _currentIndex < _contextSongs.length - 1
+        ? _contextSongs.sublist(_currentIndex + 1)
+        : <SongData>[];
+    
+    final newPlaylist = [
+      ...beforeCurrent,
+      ...current,
+      ..._playNextQueue,
+      ...afterCurrent,
+      ..._addedToQueue,
+    ];
+    
+    _currentPlaylist = newPlaylist;
+    
+    // Don't reload audio source - just update internal tracking
+    // The AudioPlayer will naturally follow the playlist
+  }
+
   // ================= PLAYBACK =================
-  Future<void> playSong(int index, {List<SongData>? customList}) async {
+  Future<void> playSong(int index, {List<SongData>? customList, String? contextName}) async {
     final List<SongData> sourceList = customList ?? _songs;
     if (sourceList.isEmpty || index < 0 || index >= sourceList.length) return;
 
-    _currentPlaylist = sourceList;
+    // Set context for new playback
+    _playbackContextName = contextName ?? "Library";
+    _contextSongs = List.from(sourceList);
+    _playNextQueue.clear();
+    _addedToQueue.clear();
+    
+    _currentPlaylist = List.from(sourceList);
     _currentIndex = index;
 
-    debugPrint("🎵 playSong called - using direct AudioPlayer");
+    debugPrint("🎵 playSong: ${sourceList[index].title} from $_playbackContextName");
     
-    // Fallback logic is now main logic
     List<AudioSource> audioSources = sourceList.map((song) {
       return AudioSource.file(song.data);
     }).toList();
@@ -776,6 +930,10 @@ class MusicProvider extends ChangeNotifier {
   Future<void> skipToNext() async {
     if (_audioPlayer.hasNext) {
       await _audioPlayer.seekToNext();
+      // Auto-play after skipping (even if was paused)
+      if (!_isPlaying) {
+        await _audioPlayer.play();
+      }
     }
     notifyListeners();
   }
@@ -783,6 +941,10 @@ class MusicProvider extends ChangeNotifier {
   Future<void> skipToPrevious() async {
     if (_audioPlayer.hasPrevious) {
       await _audioPlayer.seekToPrevious();
+      // Auto-play after skipping (even if was paused)
+      if (!_isPlaying) {
+        await _audioPlayer.play();
+      }
     }
     notifyListeners();
   }
@@ -801,7 +963,7 @@ class MusicProvider extends ChangeNotifier {
     }
   }
   
-  void Function() get playNext => skipToNext;
+  void Function() get skipNext => skipToNext;
 
   void toggleShuffle() {
     _isShuffleModeEnabled = !_isShuffleModeEnabled;

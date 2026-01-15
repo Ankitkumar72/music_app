@@ -156,6 +156,7 @@ class HomeScreen extends StatelessWidget {
                           onTap: () => musicProvider.playSong(
                             index,
                             customList: musicProvider.recentlyPlayed,
+                            contextName: "Recently Played",
                           ),
                           child: _buildSmallRecentCard(
                             song.title,
@@ -484,6 +485,7 @@ class MixDetailScreen extends StatelessWidget {
                       onTap: () => context.read<MusicProvider>().playSong(
                             index,
                             customList: songs,
+                            contextName: title,
                           ),
                       onLongPress: () => showSongMenu(context, song),
                     );

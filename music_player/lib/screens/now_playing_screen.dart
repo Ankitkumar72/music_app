@@ -89,8 +89,338 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
     );
   }
 
-  // ───── PLAYLIST MENU ─────
-  void _showPlaylistMenu(BuildContext context, MusicProvider provider) {
+  // ───── OPTIONS MENU ─────
+  void _showOptionsMenu(BuildContext context, MusicProvider provider) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A2E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              _buildOptionItem(context, Icons.queue_music, "Add to Queue", () {
+                Navigator.pop(context);
+                final song = provider.currentSong;
+                if (song != null) {
+                  provider.addToQueue(song);
+                  _showNotification("Added to Queue", Icons.check);
+                }
+              }),
+              _buildOptionItem(context, Icons.list, "Go to Queue", () {
+                Navigator.pop(context);
+                _showQueueSheet(context, provider);
+              }),
+               _buildOptionItem(context, Icons.album, "Go to Album", () {
+                Navigator.pop(context);
+                _showAlbumSheet(context, provider);
+              }),
+              _buildOptionItem(context, Icons.info_outline, "Song Details", () {
+                Navigator.pop(context);
+                _showDetailsDialog(context, provider.currentSong!);
+              }),
+              _buildOptionItem(context, Icons.playlist_add, "Add to Playlist", () {
+                Navigator.pop(context);
+                _showAddToPlaylistSheet(context, provider);
+              }),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildOptionItem(BuildContext context, IconData icon, String title, VoidCallback onTap) {
+    return ListTile(
+      leading: Icon(icon, color: Colors.white70),
+      title: Text(title, style: const TextStyle(color: Colors.white)),
+      onTap: onTap,
+    );
+  }
+
+  // ───── SUB-MENUS ─────
+  
+  void _showQueueSheet(BuildContext context, MusicProvider provider) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A2E),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.4,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (_, controller) {
+            final playNextQueue = provider.playNextQueue;
+            final addedToQueue = provider.addedToQueue;
+            final fullQueue = provider.fullQueue;
+            
+            return ListView(
+              controller: controller,
+              children: [
+                // Header
+                Container(
+                  margin: const EdgeInsets.only(top: 12, bottom: 8),
+                  child: Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    "Queue • ${provider.playbackContextName}",
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+                
+                // Now Playing
+                if (provider.currentSong != null) ...[
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Text(
+                      "NOW PLAYING",
+                      style: TextStyle(
+                        color: Colors.amber,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  _buildQueueTile(provider.currentSong!, isPlaying: true),
+                ],
+                
+                // Play Next section
+                if (playNextQueue.isNotEmpty) ...[
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Text(
+                      "PLAYING NEXT",
+                      style: TextStyle(
+                        color: Colors.greenAccent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  ...playNextQueue.asMap().entries.map((entry) => _buildQueueTile(
+                    entry.value,
+                    icon: Icons.playlist_play,
+                    iconColor: Colors.greenAccent,
+                    onTap: () {
+                      provider.playFromQueue(entry.value);
+                      Navigator.pop(context);
+                    },
+                  )),
+                ],
+                
+                // Up Next (context songs)
+                if (fullQueue.where((s) => 
+                    !playNextQueue.any((p) => p.id == s.id) && 
+                    !addedToQueue.any((a) => a.id == s.id)).isNotEmpty) ...[
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Text(
+                      "UP NEXT",
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  ...fullQueue.where((s) => 
+                      !playNextQueue.any((p) => p.id == s.id) && 
+                      !addedToQueue.any((a) => a.id == s.id))
+                    .map((song) => _buildQueueTile(
+                      song,
+                      onTap: () {
+                        provider.playFromQueue(song);
+                        Navigator.pop(context);
+                      },
+                    )),
+                ],
+                
+                // Added to Queue section
+                if (addedToQueue.isNotEmpty) ...[
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Text(
+                      "ADDED TO QUEUE",
+                      style: TextStyle(
+                        color: Colors.purpleAccent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  ...addedToQueue.map((song) => _buildQueueTile(
+                    song,
+                    icon: Icons.queue_music,
+                    iconColor: Colors.purpleAccent,
+                    onTap: () {
+                      provider.playFromQueue(song);
+                      Navigator.pop(context);
+                    },
+                  )),
+                ],
+                
+                const SizedBox(height: 20),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+  
+  Widget _buildQueueTile(SongData song, {
+    bool isPlaying = false, 
+    IconData? icon, 
+    Color? iconColor,
+    VoidCallback? onTap,
+  }) {
+    return ListTile(
+      leading: icon != null 
+          ? Icon(icon, color: iconColor ?? Colors.white54, size: 20)
+          : null,
+      title: Text(
+        song.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(color: isPlaying ? Colors.amber : Colors.white),
+      ),
+      subtitle: Text(
+        song.artist,
+        maxLines: 1,
+        style: TextStyle(color: isPlaying ? Colors.amber.withOpacity(0.7) : Colors.white54),
+      ),
+      trailing: isPlaying ? const Icon(Icons.equalizer, color: Colors.amber) : null,
+      onTap: onTap,
+    );
+  }
+
+  void _showAlbumSheet(BuildContext context, MusicProvider provider) {
+    final currentAlbum = provider.currentSong?.album;
+    if (currentAlbum == null) return;
+
+    final albumSongs = provider.allSongs.where((s) => s.album == currentAlbum).toList();
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A2E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                "Album: $currentAlbum",
+                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                itemCount: albumSongs.length,
+                itemBuilder: (context, index) {
+                  final song = albumSongs[index];
+                  return ListTile(
+                    leading: const Icon(Icons.music_note, color: Colors.white54),
+                    title: Text(song.title, style: const TextStyle(color: Colors.white)),
+                    onTap: () {
+                       // Find index in main list to play?
+                       // Or play mostly likely not supported directly without context switch.
+                       // Just showing list for now.
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showDetailsDialog(BuildContext context, SongData song) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        title: const Text("Song Details", style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+             _detailRow("Title", song.title),
+             _detailRow("Artist", song.artist),
+             _detailRow("Album", song.album),
+             _detailRow("Duration", _format(Duration(milliseconds: song.duration ?? 0))),
+             const SizedBox(height: 8),
+             Text("Path: ${song.data}", style: const TextStyle(color: Colors.white54, fontSize: 12)),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Close", style: TextStyle(color: Colors.amber)),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: RichText(
+        text: TextSpan(
+          style: const TextStyle(color: Colors.white),
+          children: [
+            TextSpan(text: "$label: ", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white70)),
+            TextSpan(text: value),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ───── ADD TO PLAYLIST (Refactored) ─────
+  void _showAddToPlaylistSheet(BuildContext context, MusicProvider provider) {
     final currentSong = provider.currentSong;
     if (currentSong == null) return;
 
@@ -244,10 +574,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
                   icon: const Icon(Icons.keyboard_arrow_down, size: 30),
                   onPressed: () => Navigator.pop(context),
                 ),
-                const Column(
+                Column(
                   children: [
-                    Text(
-                      "PLAYING FROM PLAYLIST",
+                    const Text(
+                      "PLAYING FROM",
                       style: TextStyle(
                         fontSize: 10,
                         letterSpacing: 1.5,
@@ -255,14 +585,14 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
                       ),
                     ),
                     Text(
-                      "Local Library",
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      musicProvider.playbackContextName,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
                 IconButton(
                   icon: const Icon(Icons.more_horiz),
-                  onPressed: () => _showPlaylistMenu(context, musicProvider),
+                  onPressed: () => _showOptionsMenu(context, musicProvider),
                 ),
               ],
             ),
@@ -309,7 +639,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
                 // Animated heart button
                 GestureDetector(
                   onTap: () => _onHeartTap(musicProvider, currentSong),
-                  onLongPress: () => _showPlaylistMenu(context, musicProvider),
+                  onLongPress: () => _showOptionsMenu(context, musicProvider),
                   child: AnimatedBuilder(
                     animation: _heartScaleAnimation,
                     builder: (context, child) {
@@ -412,7 +742,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
                 ),
                 IconButton(
                   icon: const Icon(Icons.skip_next, size: 40),
-                  onPressed: musicProvider.playNext,
+                  onPressed: musicProvider.skipToNext,
                 ),
                 IconButton(
                   icon: Icon(
@@ -424,6 +754,34 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
                         : Colors.white54,
                   ),
                   onPressed: musicProvider.toggleRepeat,
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 20),
+            
+            // ───── BOTTOM ACTION BAR ─────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // Device/Cast button
+                IconButton(
+                  icon: const Icon(Icons.devices, color: Colors.white54),
+                  onPressed: () {
+                    _showNotification('Device selection not available', Icons.devices);
+                  },
+                ),
+                // Share button
+                IconButton(
+                  icon: const Icon(Icons.share_outlined, color: Colors.white54),
+                  onPressed: () {
+                    _showNotification('Share feature coming soon', Icons.share);
+                  },
+                ),
+                // Queue button
+                IconButton(
+                  icon: const Icon(Icons.queue_music, color: Colors.white54, size: 28),
+                  onPressed: () => _showQueueSheet(context, musicProvider),
                 ),
               ],
             ),
