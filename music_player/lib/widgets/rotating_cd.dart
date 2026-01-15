@@ -6,7 +6,7 @@ import 'dart:io';
 class RotatingCD extends StatefulWidget {
   final int songId;
   final bool isPlaying;
-  final String? customArtworkPath; // Add custom artwork support
+  final String? customArtworkPath;
 
   const RotatingCD({
     super.key,
@@ -33,21 +33,17 @@ class _RotatingCDState extends State<RotatingCD>
 
   List<Color> _generateSongGradient(int seed) {
     final gradients = [
-      [const Color(0xFF6A4CF6), const Color(0xFF4A2EC7)], // purple
-      [const Color(0xFFFF6B6B), const Color(0xFFFFE66D)], // red-yellow
-      [const Color(0xFF2193b0), const Color(0xFF6dd5ed)], // blue-cyan
+      [const Color(0xFF6A4CF6), const Color(0xFF4A2EC7)], 
+      [const Color(0xFFFF6B6B), const Color(0xFFFFE66D)], 
+      [const Color(0xFF2193b0), const Color(0xFF6dd5ed)], 
       [const Color(0xFF0F0C29), const Color(0xFF302B63)],
-      [
-        const Color(0xFFEE0979),
-        const Color(0xFFFF6A00),
-      ], // Lush (Vibrant/Dance)
-      [const Color(0xFF11998E), const Color(0xFF38EF7D)], // teal-green
-      [const Color(0xFFcc2b5e), const Color(0xFF753a88)], // magenta
+      [const Color(0xFFEE0979), const Color(0xFFFF6A00)], 
+      [const Color(0xFF11998E), const Color(0xFF38EF7D)], 
+      [const Color(0xFFcc2b5e), const Color(0xFF753a88)], 
     ];
     return gradients[seed.abs() % gradients.length];
   }
 
-  // ───────── ROTATION ─────────
   @override
   void initState() {
     super.initState();
@@ -71,7 +67,6 @@ class _RotatingCDState extends State<RotatingCD>
     super.dispose();
   }
 
-  // ───────── UI ─────────
   @override
   Widget build(BuildContext context) {
     final colors = _generateSongGradient(_hashSeed(widget.songId));
@@ -93,63 +88,30 @@ class _RotatingCDState extends State<RotatingCD>
         width: 280,
         height: 280,
         decoration: BoxDecoration(
+          // Shape set back to circle
           shape: BoxShape.circle,
-
-          // Soft glow halo (always visible)
           boxShadow: [
             BoxShadow(
-              color: colors[0].withValues(alpha: 0.45),
+              color: colors[0].withOpacity(0.45),
               blurRadius: 60,
               spreadRadius: 6,
             ),
           ],
         ),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // Main album artwork - prioritize custom downloaded artwork
-            ClipOval(
-              child: widget.customArtworkPath != null &&
-                      File(widget.customArtworkPath!).existsSync()
-                  ? Image.file(
-                      File(widget.customArtworkPath!),
-                      width: 280,
-                      height: 280,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        // Fallback to QueryArtworkWidget if file fails
-                        return _buildQueryArtwork(colors);
-                      },
-                    )
-                  : _buildQueryArtwork(colors),
-            ),
-
-            // CD center - filled with gradient to complete the music icon look
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    colors[1].withValues(alpha: 0.8),
-                    colors[0].withValues(alpha: 0.6),
-                  ],
-                ),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  width: 2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.3),
-                    blurRadius: 4,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-            ),
-          ],
+        child: ClipOval(
+          // This keeps the image in a perfect circle
+          child: widget.customArtworkPath != null &&
+                  File(widget.customArtworkPath!).existsSync()
+              ? Image.file(
+                  File(widget.customArtworkPath!),
+                  width: 280,
+                  height: 280,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return _buildQueryArtwork(colors);
+                  },
+                )
+              : _buildQueryArtwork(colors),
         ),
       ),
     );
@@ -173,11 +135,11 @@ class _RotatingCDState extends State<RotatingCD>
             radius: 0.9,
           ),
         ),
-        child: Center(
+        child: const Center(
           child: Icon(
             Icons.music_note,
             size: 80,
-            color: Colors.white.withValues(alpha: 0.35),
+            color: Colors.white38,
           ),
         ),
       ),
