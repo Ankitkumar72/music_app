@@ -61,6 +61,7 @@
             <!-- Custom MediaService for managing MediaSession -->
             <service
                 android:name=".CustomMediaService"
+                android:foregroundServiceType="mediaPlayback"
                 android:exported="false" />
 
             <!-- Media Control Receiver for notification button clicks -->

@@ -1,37 +1,32 @@
 package com.example.music_player
 
-import android.content.*
-import android.os.Build
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.ServiceConnection
 import android.os.IBinder
-import com.ryanheise.audioservice.AudioServiceFragmentActivity
+import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
+import android.os.Build
 
-class MainActivity: AudioServiceFragmentActivity() {
-    private val CHANNEL = "com.example.music_player/notification"
-    private lateinit var notificationManager: CustomNotificationManager
-    private var methodChannel: MethodChannel? = null
-    
+class MainActivity: FlutterActivity() {
+    private val CHANNEL = "com.example.music_player/notification" // Keeping this channel name consistent with dart side unless dart side changes
     private var mediaService: CustomMediaService? = null
-    private var serviceBound = false
-    
-    private val serviceConnection = object : ServiceConnection {
+    private var isBound = false
+
+    private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            android.util.Log.d("MainActivity", "✅ Service Connected!")
             val binder = service as CustomMediaService.LocalBinder
             mediaService = binder.getService()
-            serviceBound = true
-            
-            // Pass the MediaSession token to notification manager
-            mediaService?.getSessionToken()?.let {
-                notificationManager.setMediaSessionToken(it)
-            }
-            android.util.Log.d("MainActivity", "MediaService connected and token set")
+            isBound = true
         }
-        
         override fun onServiceDisconnected(name: ComponentName?) {
-            serviceBound = false
-            mediaService = null
-            android.util.Log.d("MainActivity", "MediaService disconnected")
+            android.util.Log.d("MainActivity", "❌ Service Disconnected!")
+            isBound = false
         }
     }
     
@@ -39,49 +34,44 @@ class MainActivity: AudioServiceFragmentActivity() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val action = intent?.getStringExtra("action") ?: return
             
-            android.util.Log.d("MainActivity", "Media action received: $action")
-            
-            // Forward to Flutter
-            methodChannel?.invokeMethod("onMediaButton", mapOf("action" to action))
+            // Forward to Flutter via MethodChannel
+             flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
+                 MethodChannel(messenger, "com.example.music_player/notification")
+                    .invokeMethod("onMediaButton", mapOf("action" to action))
+             }
         }
     }
-    
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         
-        notificationManager = CustomNotificationManager(this)
-        
-        // Bind to MediaService
+        // Bind to service
         Intent(this, CustomMediaService::class.java).also { intent ->
-            bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+            bindService(intent, connection, Context.BIND_AUTO_CREATE)
         }
         
-        // Register receiver for media actions
-        val filter = IntentFilter("com.example.music_player.MEDIA_ACTION_INTERNAL")
+        // Register receiver for media actions sent from Service/Notification
+        val filter = IntentFilter("com.example.music_player.MEDIA_CONTROL")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(mediaActionReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
             registerReceiver(mediaActionReceiver, filter)
         }
-        
-        methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
-        
-        methodChannel?.setMethodCallHandler { call, result ->
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.example.music_player/notification").setMethodCallHandler { call, result ->
             when (call.method) {
-                "showNotification" -> {
-                    val title = call.argument<String>("title") ?: "Unknown"
-                    val artist = call.argument<String>("artist") ?: "Unknown Artist"
-                    val artworkPath = call.argument<String>("artworkPath")
+                "showNotification" -> { 
+                    val title = call.argument<String>("title") ?: ""
+                    val artist = call.argument<String>("artist") ?: ""
+                    val artPath = call.argument<String>("artworkPath")
                     val isPlaying = call.argument<Boolean>("isPlaying") ?: false
                     
-                    // Update MediaSession state
-                    mediaService?.updatePlaybackState(isPlaying)
-                    
-                    notificationManager.showNotification(title, artist, artworkPath, isPlaying)
-                    result.success(null)
-                }
-                "hideNotification" -> {
-                    notificationManager.cancelNotification()
+                    if (mediaService == null) {
+                         android.util.Log.e("MainActivity", "❌ FATAL: mediaService is NULL! Binding failed or not ready.")
+                    } else {
+                         android.util.Log.d("MainActivity", "➡️ Forwarding to MediaService: $title")
+                         mediaService?.updateNotification(title, artist, artPath, isPlaying)
+                    }
                     result.success(null)
                 }
                 else -> result.notImplemented()
@@ -90,14 +80,14 @@ class MainActivity: AudioServiceFragmentActivity() {
     }
     
     override fun onDestroy() {
-        if (serviceBound) {
-            unbindService(serviceConnection)
-            serviceBound = false
+        if (isBound) {
+            unbindService(connection)
+            isBound = false
         }
         try {
             unregisterReceiver(mediaActionReceiver)
         } catch (e: Exception) {
-            android.util.Log.e("MainActivity", "Error unregistering receiver: $e")
+             // ignore
         }
         super.onDestroy()
     }

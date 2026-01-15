@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:audio_service/audio_service.dart';
+// import 'package:audio_service/audio_service.dart';
 import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -14,7 +14,7 @@ import 'package:dio/dio.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 import 'Models/song_data.dart';
-import 'audio_handler.dart';
+// import 'audio_handler.dart';
 import '../main.dart';
 
 class MusicProvider extends ChangeNotifier {
@@ -22,10 +22,11 @@ class MusicProvider extends ChangeNotifier {
   final OnAudioQuery _audioQuery = OnAudioQuery();
 
   // Helper to safely get the audio handler from the global variable
-  AudioPlayerHandler? get _handler => audioHandler;
+  // AudioPlayerHandler? get _handler => audioHandler;
 
   // Use AudioService's audio handler player if available
-  AudioPlayer get _audioPlayer => _handler?.player ?? _fallbackPlayer;
+  // Direct use of AudioPlayer
+  AudioPlayer get _audioPlayer => _fallbackPlayer;
   
   // Fallback player for when audio_service isn't initialized
   final AudioPlayer _fallbackPlayer = AudioPlayer();
@@ -37,7 +38,28 @@ class MusicProvider extends ChangeNotifier {
   void _init() {
     _setupPlayerListeners();
     _setupMediaButtonHandler();
+    _prepareDefaultArt();
     _initHive();
+  }
+  
+  String? _defaultArtworkPath;
+  
+  Future<void> _prepareDefaultArt() async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/default_cover.png');
+      
+      if (!await file.exists()) {
+        final byteData = await rootBundle.load('assets/images/default_cover.png');
+        await file.writeAsBytes(byteData.buffer.asUint8List());
+      }
+      
+      _defaultArtworkPath = file.path;
+      notifyListeners();
+      debugPrint('✅ Default artwork prepared at: $_defaultArtworkPath');
+    } catch (e) {
+      debugPrint('❌ Error preparing default artwork: $e');
+    }
   }
 
   // ================= SONG LISTS =================
@@ -237,7 +259,12 @@ class MusicProvider extends ChangeNotifier {
     return null;
   }
 
-  String? getCustomArtwork(int songId) => _artworkCache[songId];
+  String? getCustomArtwork(int songId) {
+    if (_artworkCache.containsKey(songId)) {
+      return _artworkCache[songId];
+    }
+    return _defaultArtworkPath;
+  }
 
   // ================= MANUAL ARTWORK SEARCH =================
   Future<List<Map<String, dynamic>>> searchArtwork(String query) async {
@@ -377,7 +404,7 @@ class MusicProvider extends ChangeNotifier {
       if (index != null && _currentIndex != index) {
         _currentIndex = index;
         _handleSongChange(index);
-        _updateNotificationMetadata(); // Restored to ensure AudioService has data
+        // _updateNotificationMetadata(); // Removed
         _updateCustomNotification();
         notifyListeners();
       }
@@ -393,22 +420,9 @@ class MusicProvider extends ChangeNotifier {
     });
   }
 
-  void _updateNotificationMetadata() {
-    if (currentSong == null || _handler == null) return;
-    
-    final song = currentSong!;
-    final artworkPath = getCustomArtwork(song.id);
-    
-    final mediaItem = MediaItem(
-      id: song.data,
-      title: song.title,
-      artist: song.artist,
-      artUri: artworkPath != null ? Uri.file(artworkPath) : null,
-      duration: _audioPlayer.duration,
-    );
-    
-    _handler!.updateMediaItem(mediaItem);
-  }
+  // void _updateNotificationMetadata() {
+  //   // Removed AudioService metadata update
+  // }
 
   // ================= HIVE INIT =================
   Future<void> _initHive() async {
@@ -709,38 +723,22 @@ class MusicProvider extends ChangeNotifier {
     _currentPlaylist = sourceList;
     _currentIndex = index;
 
-    debugPrint("🎵 playSong called - audioHandler status: ${_handler != null ? 'AVAILABLE' : 'NULL'}");
+    debugPrint("🎵 playSong called - using direct AudioPlayer");
     
-    if (_handler != null) {
-      final mediaItems = sourceList.map((song) {
-        final artworkPath = getCustomArtwork(song.id);
-        debugPrint("   Creating MediaItem for '${song.title}' - Artwork: ${artworkPath ?? 'NONE'}");
-        return MediaItem(
-          id: song.data,
-          title: song.title,
-          artist: song.artist.isEmpty ? 'Unknown Artist' : song.artist,
-          album: song.artist.isEmpty ? 'Unknown Album' : song.artist,
-          artUri: artworkPath != null ? Uri.file(artworkPath) : null,
-        );
-      }).toList();
+    // Fallback logic is now main logic
+    List<AudioSource> audioSources = sourceList.map((song) {
+      return AudioSource.file(song.data);
+    }).toList();
 
-      try {
-        await _handler!.playPlaylist(mediaItems, initialIndex: index);
-        _isPlaying = true;
-        debugPrint('✅ Playing via audio_service: ${mediaItems[index].title}');
-        debugPrint('   Initial song artwork URI: ${mediaItems[index].artUri}');
-        
-        // Update custom notification with fresh artwork
-        await _updateCustomNotification();
-        
-        notifyListeners();
-      } catch (e) {
-        debugPrint('❌ Error loading audio source via audio_service: $e');
-        _fallbackPlayback(sourceList, index);
-      }
-    } else {
-      debugPrint('⚠️ audioHandler is NULL - using fallback playback');
-      _fallbackPlayback(sourceList, index);
+    try {
+      await _audioPlayer.setAudioSource(
+        ConcatenatingAudioSource(children: audioSources),
+        initialIndex: index,
+      );
+      await _audioPlayer.play();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('❌ Error loading audio source: $e');
     }
   }
 
@@ -764,55 +762,33 @@ class MusicProvider extends ChangeNotifier {
   }
 
   void play() {
-    if (_handler != null) {
-      _handler!.play();
-    } else {
-      _audioPlayer.play();
-    }
+    _audioPlayer.play();
   }
 
   void pause() {
-    if (_handler != null) {
-      _handler!.pause();
-    } else {
-      _audioPlayer.pause();
-    }
+    _audioPlayer.pause();
   }
 
   void stop() {
-    if (_handler != null) {
-      _handler!.stop();
-    } else {
-      _audioPlayer.stop();
-    }
+    _audioPlayer.stop();
   }
 
   Future<void> skipToNext() async {
-    if (_handler != null) {
-      await _handler!.skipToNext();
-      _currentIndex = _handler!.player.currentIndex ?? 0;
-    } else if (_audioPlayer.hasNext) {
+    if (_audioPlayer.hasNext) {
       await _audioPlayer.seekToNext();
     }
     notifyListeners();
   }
 
   Future<void> skipToPrevious() async {
-    if (_handler != null) {
-      await _handler!.skipToPrevious();
-      _currentIndex = _handler!.player.currentIndex ?? 0;
-    } else if (_audioPlayer.hasPrevious) {
+    if (_audioPlayer.hasPrevious) {
       await _audioPlayer.seekToPrevious();
     }
     notifyListeners();
   }
 
   void seekTo(Duration position) {
-    if (_handler != null) {
-      _handler!.seek(position);
-    } else {
-      _audioPlayer.seek(position);
-    }
+    _audioPlayer.seek(position);
   }
 
   void Function() get playPrevious => skipToPrevious;
@@ -829,28 +805,19 @@ class MusicProvider extends ChangeNotifier {
 
   void toggleShuffle() {
     _isShuffleModeEnabled = !_isShuffleModeEnabled;
-    if (_handler != null) {
-      _handler!.player.setShuffleModeEnabled(
-        _isShuffleModeEnabled,
-      );
-    } else {
-      _audioPlayer.setShuffleModeEnabled(_isShuffleModeEnabled);
-    }
+    _audioPlayer.setShuffleModeEnabled(_isShuffleModeEnabled);
     notifyListeners();
   }
 
   void toggleRepeat() {
-    _loopMode = _loopMode == LoopMode.off
-        ? LoopMode.all
-        : _loopMode == LoopMode.all
-        ? LoopMode.one
-        : LoopMode.off;
-    
-    if (_handler != null) {
-      _handler!.player.setLoopMode(_loopMode);
+    if (_audioPlayer.loopMode == LoopMode.off) {
+      _loopMode = LoopMode.all;
+    } else if (_audioPlayer.loopMode == LoopMode.all) {
+      _loopMode = LoopMode.one;
     } else {
-      _audioPlayer.setLoopMode(_loopMode);
+      _loopMode = LoopMode.off;
     }
+    _audioPlayer.setLoopMode(_loopMode);
     notifyListeners();
   }
 
@@ -909,13 +876,22 @@ class MusicProvider extends ChangeNotifier {
       return;
     }
     
-    final artPath = getCustomArtwork(currentSong!.id);
+    // Slight delay removed as we are now single source of truth
+    // await Future.delayed(const Duration(milliseconds: 500));
+    
+    // User requested to ALWAYS use default artwork for notification
+    final artPath = _defaultArtworkPath; // getCustomArtwork(currentSong!.id);
+    
     debugPrint("🔔 Updating Custom Notification: ${currentSong!.title}");
     debugPrint("   Song ID: ${currentSong!.id}");
-    debugPrint("   Artwork Path: $artPath");
+    debugPrint("   Artwork Path: $artPath (Default: $_defaultArtworkPath)");
     debugPrint("   Is Playing: $_isPlaying");
     
     try {
+      debugPrint("🚀 SENDING TO NATIVE:");
+      debugPrint("   Title: ${currentSong!.title}");
+      debugPrint("   Path : $artPath");
+      
       await platform.invokeMethod('showNotification', {
         'title': currentSong!.title,
         'artist': currentSong!.artist.isEmpty ? 'Unknown Artist' : currentSong!.artist,
