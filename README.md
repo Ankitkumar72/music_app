@@ -11,7 +11,9 @@
 
 ---
 ## 📥 Download
-[Click here to download the latest Pixy APK](https://github.com/Ankitkumar72/music_app/releases/download/v1.0.0/Pixy_v1.0.0.apk)
+[**Download Pixy v1.0.0 APK**](https://github.com/Ankitkumar72/music_app/releases/download/v1.0.0/Pixy_v1.0.0.apk)
+
+> 💡 **Installation Note:** To install this app, you may need to enable "Install from Unknown Sources" in your device settings. This is a standard requirement for apps downloaded outside of the Google Play Store.
 
 ## ✨ Features
 
