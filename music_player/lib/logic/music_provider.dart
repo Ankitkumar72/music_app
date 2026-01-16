@@ -158,19 +158,15 @@ class MusicProvider extends ChangeNotifier {
     return artistList;
   }
 
-  /// Returns a list of unique albums (using artist as a grouping key since we don't have album metadata)
-  /// Each "album" is represented as the artist name for grouping purposes
+  
   List<String> get albums {
-    // Since SongData doesn't have album field, we'll group by artist
-    // This creates "albums" as collections by the same artist
+    
     return artists;
   }
 
-  /// Returns a list of unique genres
-  /// Since we don't have genre metadata, we'll create some based on patterns
+  
   List<String> get genres {
-    // Generate some pseudo-genres based on artist or title patterns
-    // For now, return a predefined list that can be expanded later
+    
     final genreSet = <String>{'All Songs', 'Favorites'};
     
     // Add "By Artist" genres for artists with multiple songs
@@ -435,7 +431,7 @@ class MusicProvider extends ChangeNotifier {
       if (index != null && _currentIndex != index) {
         _currentIndex = index;
         _handleSongChange(index);
-        // _updateNotificationMetadata(); // Removed
+        
         _updateCustomNotification();
         notifyListeners();
       }
@@ -451,9 +447,7 @@ class MusicProvider extends ChangeNotifier {
     });
   }
 
-  // void _updateNotificationMetadata() {
-  //   // Removed AudioService metadata update
-  // }
+  
 
   // ================= HIVE INIT =================
   Future<void> _initHive() async {
@@ -846,13 +840,6 @@ class MusicProvider extends ChangeNotifier {
   Future<void> _rebuildAudioSource() async {
     if (_contextSongs.isEmpty) return;
     
-    // Build the full playback order:
-    // 1. Songs before current (already played)
-    // 2. Current song
-    // 3. Play Next queue
-    // 4. Remaining context songs
-    // 5. Added to Queue
-    
     final beforeCurrent = _currentIndex > 0 
         ? _contextSongs.sublist(0, _currentIndex) 
         : <SongData>[];
@@ -1122,10 +1109,6 @@ class MusicProvider extends ChangeNotifier {
       return;
     }
     
-    // Slight delay removed as we are now single source of truth
-    // await Future.delayed(const Duration(milliseconds: 500));
-    
-    // User requested to ALWAYS use default artwork for notification
     final artPath = _defaultArtworkPath; // getCustomArtwork(currentSong!.id);
     
     debugPrint("🔔 Updating Custom Notification: ${currentSong!.title}");
@@ -1143,6 +1126,8 @@ class MusicProvider extends ChangeNotifier {
         'artist': currentSong!.artist.isEmpty ? 'Unknown Artist' : currentSong!.artist,
         'artworkPath': artPath,
         'isPlaying': _isPlaying,
+        'duration': currentSong!.duration ?? 0,
+        'position': _audioPlayer.position.inMilliseconds,
       });
       debugPrint("✅ Notification update sent successfully");
     } catch (e) {
@@ -1167,6 +1152,12 @@ class MusicProvider extends ChangeNotifier {
             break;
           case 'previous':
             await skipToPrevious();
+            break;
+          case 'seek':
+            final pos = call.arguments['position'];
+            if (pos != null) {
+              seekTo(Duration(milliseconds: pos));
+            }
             break;
         }
       }
