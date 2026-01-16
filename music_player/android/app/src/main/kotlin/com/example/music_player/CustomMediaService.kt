@@ -10,6 +10,12 @@ class CustomMediaService : Service() {
     private val binder = LocalBinder()
     private lateinit var mediaSession: MediaSessionCompat
     private lateinit var notificationManager: CustomNotificationManager
+    
+    // Cache for artwork to avoid re-decoding
+    private var cachedArtwork: android.graphics.Bitmap? = null
+    private var cachedArtPath: String? = null
+    private var lastTitle: String = ""
+    private var lastArtist: String = ""
 
     inner class LocalBinder : Binder() {
         fun getService(): CustomMediaService = this@CustomMediaService
@@ -39,38 +45,50 @@ class CustomMediaService : Service() {
     override fun onBind(intent: Intent?): IBinder = binder
 
     fun updateNotification(title: String, artist: String, artPath: String?, isPlaying: Boolean) {
-        android.util.Log.d("CustomMediaService", "updateNotification called: $title, path: $artPath")
+        android.util.Log.d("CustomMediaService", "updateNotification called: $title, isPlaying: $isPlaying")
         
-        // 1. Decode Bitmap
-        var artwork: android.graphics.Bitmap? = null
-        if (!artPath.isNullOrEmpty()) {
-            try {
-                // Check if file exists to avoid decoding errors
-                val file = java.io.File(artPath)
-                if (file.exists()) {
-                    artwork = android.graphics.BitmapFactory.decodeFile(artPath)
-                    android.util.Log.d("CustomMediaService", "✅ Decoded bitmap: ${artwork?.width}x${artwork?.height}")
-                } else {
-                     android.util.Log.e("CustomMediaService", "❌ File does not exist: $artPath")
+        // Check if only playback state changed (fast path - no bitmap decoding needed)
+        val isSameSong = title == lastTitle && artist == lastArtist && artPath == cachedArtPath
+        
+        // Only decode bitmap if artwork path changed
+        if (!isSameSong || cachedArtwork == null) {
+            cachedArtwork = null
+            cachedArtPath = artPath
+            lastTitle = title
+            lastArtist = artist
+            
+            if (!artPath.isNullOrEmpty()) {
+                try {
+                    val file = java.io.File(artPath)
+                    if (file.exists()) {
+                        cachedArtwork = android.graphics.BitmapFactory.decodeFile(artPath)
+                        android.util.Log.d("CustomMediaService", "✅ Decoded NEW bitmap: ${cachedArtwork?.width}x${cachedArtwork?.height}")
+                    } else {
+                        android.util.Log.e("CustomMediaService", "❌ File does not exist: $artPath")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("CustomMediaService", "❌ Error decoding bitmap: $e")
                 }
-            } catch (e: Exception) {
-                android.util.Log.e("CustomMediaService", "❌ Error decoding bitmap: $e")
             }
+        } else {
+            android.util.Log.d("CustomMediaService", "⚡ Fast path: reusing cached bitmap")
         }
 
-        // 2. Update MediaSession Metadata (CRITICAL for lock screen / system UI)
-        val metadataBuilder = android.support.v4.media.MediaMetadataCompat.Builder()
-            .putString(android.support.v4.media.MediaMetadataCompat.METADATA_KEY_TITLE, title)
-            .putString(android.support.v4.media.MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
-        
-        if (artwork != null) {
-            metadataBuilder.putBitmap(android.support.v4.media.MediaMetadataCompat.METADATA_KEY_ALBUM_ART, artwork)
-            metadataBuilder.putBitmap(android.support.v4.media.MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON, artwork)
+        // Update MediaSession Metadata (only if song changed)
+        if (!isSameSong) {
+            val metadataBuilder = android.support.v4.media.MediaMetadataCompat.Builder()
+                .putString(android.support.v4.media.MediaMetadataCompat.METADATA_KEY_TITLE, title)
+                .putString(android.support.v4.media.MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
+            
+            if (cachedArtwork != null) {
+                metadataBuilder.putBitmap(android.support.v4.media.MediaMetadataCompat.METADATA_KEY_ALBUM_ART, cachedArtwork)
+                metadataBuilder.putBitmap(android.support.v4.media.MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON, cachedArtwork)
+            }
+            
+            mediaSession.setMetadata(metadataBuilder.build())
         }
-        
-        mediaSession.setMetadata(metadataBuilder.build())
 
-        // 3. Update Playback State
+        // Always update playback state (this is fast)
         val state = if (isPlaying) {
             android.support.v4.media.session.PlaybackStateCompat.STATE_PLAYING
         } else {
@@ -90,9 +108,9 @@ class CustomMediaService : Service() {
                 .build()
         )
 
-        // 4. Build and Show Notification
+        // Build and Show Notification (uses cached bitmap)
         val notification = notificationManager.buildNotification(
-            title, artist, artwork, isPlaying, mediaSession
+            title, artist, cachedArtwork, isPlaying, mediaSession
         )
         
         if (isPlaying) {

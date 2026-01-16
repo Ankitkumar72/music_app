@@ -84,8 +84,9 @@ class _NavigationShellState extends State<NavigationShell> {
         if (didPop) return;
         
         if (_selectedIndex == 0) {
-          // On Home tab - exit the app
-          SystemNavigator.pop();
+          // On Home tab - move to background instead of exiting
+          const MethodChannel('com.example.music_player/notification')
+              .invokeMethod('moveToBackground');
         } else {
           // Not on Home tab - go to Home first
           setState(() => _selectedIndex = 0);

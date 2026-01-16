@@ -74,6 +74,10 @@ class MainActivity: FlutterActivity() {
                     }
                     result.success(null)
                 }
+                "moveToBackground" -> {
+                    moveTaskToBack(true)
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }
