@@ -4,7 +4,7 @@
 # 🎵 Pixy Music Player
 
 <p align="center">
-  <img src="music_player/assets/images/logo2.png" width="200" alt="Pixy Logo" style="filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.3));"/>
+  <img src="music_player/assets/images/logo2.png" width="120" alt="Pixy Logo"/>
 </p>
 
 **Pixy** is a modern, high-performance Flutter music player designed for local audio playback. It features a stunning dynamic UI, smart playlist management, background playback with notification controls, and a robust state management system powered by Provider.
