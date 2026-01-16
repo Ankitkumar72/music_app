@@ -30,7 +30,7 @@
 
 ### 📚 Library Management
 - **Complete Song Library** – Browse all local audio files
-- **Sort Options** – Organize by title, artist, album, or date
+- **Sort Options** – Organize by title, artist, album, or genre
 - **Grid/List View** – Switch between viewing modes
 - **Album Art Display** – Beautiful artwork for all songs
 
@@ -48,8 +48,6 @@
 
 ### 🎨 Artwork Management
 - **Auto-Download Artwork** – Automatically fetches album art from the web
-- **Manual Search** – Search and apply custom artwork
-- **Custom Artwork** – Set your own images for any song
 - **Artwork Cache** – Efficient storage for fast loading
 
 ### 🔔 Background Playback & Notifications
