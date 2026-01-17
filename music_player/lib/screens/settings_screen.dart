@@ -285,6 +285,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _buildSectionHeader("ℹ️ About & Support"),
                   const SizedBox(height: 12),
 
+                  // Privacy Policy
+                  _buildActionCard(
+                    icon: Icons.privacy_tip_rounded,
+                    iconColor: const Color(0xFF4CAF50),
+                    title: "Privacy Policy",
+                    subtitle: "Read about how we handle your data",
+                    onTap: () => _showPrivacyPolicy(context),
+                  ),
+                  const SizedBox(height: 12),
+
+
+
                   // App Version Display
                   _buildInfoCard(
                     icon: Icons.info_outline_rounded,
@@ -1065,6 +1077,88 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
+    );
+  }
+  void _showPrivacyPolicy(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.privacy_tip, color: Color(0xFF4CAF50)),
+            SizedBox(width: 8),
+            Text("Privacy Policy"),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "Your Privacy Matters",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Pixy Music Player is designed to respect your privacy and data security.",
+                style: TextStyle(color: Colors.white.withOpacity(0.8)),
+              ),
+              const SizedBox(height: 16),
+              _buildPrivacyPoint(
+                "💾 Local Storage Only",
+                "Your music library, playlists, and listening history are stored locally on your device. We do not upload your personal files to any server.",
+              ),
+              const SizedBox(height: 8),
+              _buildPrivacyPoint(
+                "🌐 Internet Usage",
+                "The app uses internet connection solely for:\n• Downloading album artwork (via iTunes/Deezer APIs)\n• Fetching lyrics (future feature)\n\nAll network communication is secured via HTTPS.",
+              ),
+              const SizedBox(height: 8),
+              _buildPrivacyPoint(
+                "🕵️ No Tracking",
+                "We do not collect usage analytics, personal identifiers, or sell your data to third parties.",
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              "Close",
+              style: TextStyle(color: Color(0xFFFFD700)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPrivacyPoint(String title, String description) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: Color(0xFFFFD700),
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          description,
+          style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13),
+        ),
+      ],
     );
   }
 }
