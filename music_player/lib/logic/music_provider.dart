@@ -24,11 +24,6 @@ class MusicProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const platform = MethodChannel('com.example.music_player/notification');
   final OnAudioQuery _audioQuery = OnAudioQuery();
 
-  // Helper to safely get the audio handler from the global variable
-  // AudioPlayerHandler? get _handler => audioHandler;
-
-  // Use AudioService's audio handler player if available
-  // Direct use of AudioPlayer
   AudioPlayer get _audioPlayer => _fallbackPlayer;
   
   // Fallback player for when audio_service isn't initialized
@@ -73,8 +68,7 @@ class MusicProvider extends ChangeNotifier with WidgetsBindingObserver {
               _audioPlayer.setVolume(1.0);
               break;
             case AudioInterruptionType.pause:
-              // Optionally resume if we want auto-resume behavior
-               // if (!_isPlaying) play(); 
+              
                break;
             case AudioInterruptionType.unknown:
               break;
