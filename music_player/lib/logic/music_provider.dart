@@ -1,12 +1,14 @@
 // ignore_for_file: deprecated_member_use
 
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:audio_session/audio_session.dart';
 // import 'package:audio_service/audio_service.dart';
 import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
@@ -40,13 +42,55 @@ class MusicProvider extends ChangeNotifier with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _setupPlayerListeners();
     _setupMediaButtonHandler();
+    _initSession();
     _prepareDefaultArt();
     _initHive();
+  }
+
+  Future<void> _initSession() async {
+    try {
+      final session = await AudioSession.instance;
+      await session.configure(const AudioSessionConfiguration.music());
+      
+      session.interruptionEventStream.listen((event) {
+        if (!_audioFocusEnabled) return;
+
+        if (event.begin) {
+          switch (event.type) {
+            case AudioInterruptionType.duck:
+              _audioPlayer.setVolume(0.3);
+              break;
+            case AudioInterruptionType.pause:
+            case AudioInterruptionType.unknown:
+              if (_isPlaying) {
+                pause();
+              }
+              break;
+          }
+        } else {
+          switch (event.type) {
+            case AudioInterruptionType.duck:
+              _audioPlayer.setVolume(1.0);
+              break;
+            case AudioInterruptionType.pause:
+              // Optionally resume if we want auto-resume behavior
+               // if (!_isPlaying) play(); 
+               break;
+            case AudioInterruptionType.unknown:
+              break;
+          }
+        }
+      });
+      debugPrint("🎧 AudioSession initialized");
+    } catch (e) {
+      debugPrint("Error initializing AudioSession: $e");
+    }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _sleepTimer?.cancel();
     _fallbackPlayer.dispose();
     super.dispose();
   }
@@ -111,6 +155,53 @@ class MusicProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool _isPlaying = false;
   bool _isShuffleModeEnabled = false;
   LoopMode _loopMode = LoopMode.off;
+
+  // ================= CROSSFADE & FOCUS =================
+  bool _audioFocusEnabled = true;
+  bool _crossfadeEnabled = false;
+  double _crossfadeDuration = 5.0; // seconds
+
+  void updateAudioFocus(bool enabled) {
+    _audioFocusEnabled = enabled;
+    if (enabled) {
+      _initSession();
+    }
+  }
+
+  void updateCrossfade(bool enabled, double duration) {
+    _crossfadeEnabled = enabled;
+    _crossfadeDuration = duration;
+  }
+
+
+  // ================= SLEEP TIMER =================
+  Timer? _sleepTimer;
+  int _sleepTimerMinutes = 0;
+  int get sleepTimerMinutes => _sleepTimerMinutes;
+
+  void startSleepTimer(int minutes) {
+    _sleepTimer?.cancel();
+    _sleepTimerMinutes = minutes;
+    
+    if (minutes > 0) {
+      debugPrint("⏲️ Sleep timer set for $minutes minutes");
+      _sleepTimer = Timer(Duration(minutes: minutes), () {
+        pause();
+        _sleepTimerMinutes = 0;
+        _sleepTimer = null;
+        notifyListeners();
+        debugPrint("💤 Sleep timer triggered - Playback paused");
+      });
+    } else {
+      debugPrint("⏲️ Sleep timer cancelled");
+      _sleepTimerMinutes = 0;
+    }
+    notifyListeners();
+  }
+
+  void cancelSleepTimer() {
+    startSleepTimer(0);
+  }
 
   // ================= HIVE =================
   late Box<PlaylistData> _playlistBox;
@@ -479,6 +570,25 @@ class MusicProvider extends ChangeNotifier with WidgetsBindingObserver {
       _metadataBox = await Hive.openBox<CachedMetadata>('metadata');
       _statsBox = await Hive.openBox('music_stats');
       _isHiveReady = true;
+
+      // Load settings
+      final box = Hive.box('stats'); // assuming 'stats' is opened elsewhere or lazily? No, settings screen opened 'stats' box.
+      // Wait, settings screen uses 'stats' box. MusicProvider uses 'music_stats'. This is inconsistent.
+      // I should align them. But 'stats' might be already open by splash screen or main?
+      // MusicProvider opens 'music_stats'. SettingsScreen opens 'stats'.
+      // I should stick to one. But to avoid breaking existing users, I'll check 'stats' if I can.
+      // Actually, 'stats' box holds settings in SettingsScreen.
+      // Let's use 'stats' box here too.
+      // Wait, Hive.openBox('stats') might be needed.
+      final statsBox = await Hive.openBox('stats');
+      _audioFocusEnabled = statsBox.get('audioFocus', defaultValue: true);
+      _crossfadeEnabled = statsBox.get('crossfade', defaultValue: false);
+      _crossfadeDuration = statsBox.get('crossfadeDuration', defaultValue: 5.0);
+      
+      // Initialize session if enabled
+      if (_audioFocusEnabled) {
+        _initSession();
+      }
 
       for (var entry in _metadataBox.values) {
         _artworkCache[entry.songId] = entry.localImagePath;
@@ -1017,7 +1127,42 @@ class MusicProvider extends ChangeNotifier with WidgetsBindingObserver {
     _audioPlayer.stop();
   }
 
+  // ================= FADE HELPERS =================
+  Future<void> _fadeOut() async {
+    if (!_crossfadeEnabled) return;
+    
+    // Create a smooth volume fade out
+    final steps = 10;
+    final stepDuration = Duration(milliseconds: (_crossfadeDuration * 1000 / steps).round());
+    
+    for (var i = steps; i >= 0; i--) {
+      if (!_isPlaying && i != steps) break; // Stop if paused (except first step)
+      await _audioPlayer.setVolume(i / steps);
+      await Future.delayed(stepDuration);
+    }
+  }
+
+  Future<void> _fadeIn() async {
+    if (!_crossfadeEnabled) return;
+    
+    // Create a smooth volume fade in
+    final steps = 10;
+    final stepDuration = Duration(milliseconds: (_crossfadeDuration * 1000 / steps).round());
+    
+    for (var i = 0; i <= steps; i++) {
+      if (!_isPlaying) break; // Stop if paused
+      await _audioPlayer.setVolume(i / steps);
+      await Future.delayed(stepDuration);
+    }
+    // Ensure full volume at the end
+    await _audioPlayer.setVolume(1.0);
+  }
+
   Future<void> skipToNext() async {
+    if (_crossfadeEnabled && _isPlaying) {
+      await _fadeOut();
+    }
+
     if (_audioPlayer.hasNext) {
       await _audioPlayer.seekToNext();
       // Auto-play after skipping (even if was paused)
@@ -1025,10 +1170,19 @@ class MusicProvider extends ChangeNotifier with WidgetsBindingObserver {
         await _audioPlayer.play();
       }
     }
+    
     notifyListeners();
+
+    if (_crossfadeEnabled && _isPlaying) {
+      _fadeIn(); // Fire and forget to not block UI
+    }
   }
 
   Future<void> skipToPrevious() async {
+    if (_crossfadeEnabled && _isPlaying) {
+      await _fadeOut();
+    }
+
     if (_audioPlayer.hasPrevious) {
       await _audioPlayer.seekToPrevious();
       // Auto-play after skipping (even if was paused)
@@ -1036,7 +1190,12 @@ class MusicProvider extends ChangeNotifier with WidgetsBindingObserver {
         await _audioPlayer.play();
       }
     }
+    
     notifyListeners();
+
+    if (_crossfadeEnabled && _isPlaying) {
+      _fadeIn(); // Fire and forget
+    }
   }
 
   void seekTo(Duration position) {

@@ -24,6 +24,7 @@ dependencies:
   palette_generator: ^0.3.3+3
   shared_preferences: ^2.2.2
   connectivity_plus: ^6.0.5
+  audio_session: ^0.2.2
 
 dev_dependencies:
   flutter_test:

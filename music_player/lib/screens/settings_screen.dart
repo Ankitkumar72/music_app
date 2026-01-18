@@ -121,6 +121,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       activeColor: const Color(0xFFFFD700),
                       onChanged: (value) {
                         setState(() => _audioFocusEnabled = value);
+                        context.read<MusicProvider>().updateAudioFocus(value);
                         _saveSettings();
                       },
                     ),
@@ -132,11 +133,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     icon: Icons.bedtime_rounded,
                     iconColor: const Color(0xFF5D4037),
                     title: "Sleep Timer",
-                    subtitle: _sleepTimerMinutes == 0
+                    subtitle: context.watch<MusicProvider>().sleepTimerMinutes == 0
                         ? "Disabled"
-                        : "Stop playback after $_sleepTimerMinutes min",
+                        : "Stop playback after ${context.watch<MusicProvider>().sleepTimerMinutes} min",
                     trailing: DropdownButton<int>(
-                      value: _sleepTimerMinutes,
+                      value: context.watch<MusicProvider>().sleepTimerMinutes,
                       dropdownColor: const Color(0xFF1A1A2E),
                       underline: const SizedBox(),
                       icon: const Icon(Icons.arrow_drop_down, color: Colors.white54),
@@ -149,10 +150,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         DropdownMenuItem(value: 90, child: Text("90 min")),
                       ],
                       onChanged: (value) {
-                        setState(() => _sleepTimerMinutes = value ?? 0);
-                        _saveSettings();
-                        if (value != null && value > 0) {
-                          _showSnackBar("Sleep timer set for $value minutes");
+                        final minutes = value ?? 0;
+                        context.read<MusicProvider>().startSleepTimer(minutes);
+                        
+                        // We do NOT save to Hive because it's a one-off timer
+                        if (minutes > 0) {
+                          _showSnackBar("Sleep timer set for $minutes minutes");
+                        } else {
+                          _showSnackBar("Sleep timer turned off");
                         }
                       },
                     ),
@@ -172,6 +177,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       activeColor: const Color(0xFFFFD700),
                       onChanged: (value) {
                         setState(() => _crossfadeEnabled = value);
+                        context.read<MusicProvider>().updateCrossfade(value, _crossfadeDuration);
                         _saveSettings();
                       },
                     ),
@@ -202,7 +208,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               onChanged: (value) {
                                 setState(() => _crossfadeDuration = value);
                               },
-                              onChangeEnd: (value) => _saveSettings(),
+                              onChangeEnd: (value) {
+                                _saveSettings();
+                                context.read<MusicProvider>().updateCrossfade(_crossfadeEnabled, value);
+                              },
                             ),
                           ),
                           const Text("12s", style: TextStyle(color: Colors.white54)),
