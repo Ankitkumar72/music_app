@@ -7,12 +7,14 @@ class RotatingCD extends StatefulWidget {
   final int songId;
   final bool isPlaying;
   final String? customArtworkPath;
+  final String? defaultArtworkPath;
 
   const RotatingCD({
     super.key,
     required this.songId,
     required this.isPlaying,
     this.customArtworkPath,
+    this.defaultArtworkPath,
   });
 
   @override
@@ -127,22 +129,35 @@ class _RotatingCDState extends State<RotatingCD>
       quality: 100,
       artworkQuality: FilterQuality.high,
       keepOldArtwork: true,
-      nullArtworkWidget: Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [colors[0], colors[1], const Color(0xFF0B0B0B)],
-            radius: 0.9,
-          ),
-        ),
-        child: const Center(
-          child: Icon(
-            Icons.music_note,
-            size: 80,
-            color: Colors.white38,
-          ),
-        ),
-      ),
+      nullArtworkWidget: (widget.defaultArtworkPath != null && File(widget.defaultArtworkPath!).existsSync())
+          ? Container(
+              decoration: const BoxDecoration(shape: BoxShape.circle),
+              child: ClipOval(
+                child: Image.file(
+                  File(widget.defaultArtworkPath!),
+                  width: 280,
+                  height: 280,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            )
+          : Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [colors[0], colors[1], const Color(0xFF0B0B0B)],
+                  radius: 0.9,
+                ),
+              ),
+              child: const Center(
+                child: Icon(
+                  Icons.music_note,
+                  size: 80,
+                  color: Colors.white38,
+                ),
+              ),
+            ),
     );
+
   }
 }

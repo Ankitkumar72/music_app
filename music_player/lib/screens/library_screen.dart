@@ -322,10 +322,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
             : QueryArtworkWidget(
                 id: song.id,
                 type: ArtworkType.AUDIO,
-                nullArtworkWidget: const Icon(
-                  Icons.music_note,
-                  color: Colors.white54,
-                ),
+                nullArtworkWidget: provider.defaultArtworkPath != null &&
+                        File(provider.defaultArtworkPath!).existsSync()
+                    ? Image.file(File(provider.defaultArtworkPath!),
+                        fit: BoxFit.cover)
+                    : const Icon(
+                        Icons.music_note,
+                        color: Colors.white54,
+                      ),
               ),
       ),
       title: Text(
@@ -541,17 +545,25 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         : QueryArtworkWidget(
                             id: song.id,
                             type: ArtworkType.AUDIO,
-                            nullArtworkWidget: Icon(
-                              isCircular ? Icons.person : Icons.album,
-                              color: Colors.white54,
-                              size: 40,
-                            ),
+                            nullArtworkWidget: provider.defaultArtworkPath != null &&
+                                    File(provider.defaultArtworkPath!).existsSync()
+                                ? Image.file(File(provider.defaultArtworkPath!),
+                                    fit: BoxFit.cover)
+                                : Icon(
+                                    isCircular ? Icons.person : Icons.album,
+                                    color: Colors.white54,
+                                    size: 40,
+                                  ),
                           ))
-                    : Icon(
-                        isCircular ? Icons.person : Icons.album,
-                        color: Colors.white54,
-                        size: 40,
-                      ),
+                    : (provider.defaultArtworkPath != null &&
+                            File(provider.defaultArtworkPath!).existsSync()
+                        ? Image.file(File(provider.defaultArtworkPath!),
+                            fit: BoxFit.cover)
+                        : Icon(
+                            isCircular ? Icons.person : Icons.album,
+                            color: Colors.white54,
+                            size: 40,
+                          )),
               ),
             ),
             const SizedBox(height: 12),

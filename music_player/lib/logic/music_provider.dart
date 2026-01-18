@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:just_audio/just_audio.dart';
 // import 'package:audio_service/audio_service.dart';
@@ -17,7 +18,7 @@ import 'Models/song_data.dart';
 // import 'audio_handler.dart';
 import '../main.dart';
 
-class MusicProvider extends ChangeNotifier {
+class MusicProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const platform = MethodChannel('com.example.music_player/notification');
   final OnAudioQuery _audioQuery = OnAudioQuery();
 
@@ -36,13 +37,30 @@ class MusicProvider extends ChangeNotifier {
   }
 
   void _init() {
+    WidgetsBinding.instance.addObserver(this);
     _setupPlayerListeners();
     _setupMediaButtonHandler();
     _prepareDefaultArt();
     _initHive();
   }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _fallbackPlayer.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      debugPrint("🔄 App resumed - Auto-refreshing library...");
+      fetchSongs();
+    }
+  }
   
   String? _defaultArtworkPath;
+  String? get defaultArtworkPath => _defaultArtworkPath;
   
   Future<void> _prepareDefaultArt() async {
     try {
@@ -288,9 +306,14 @@ class MusicProvider extends ChangeNotifier {
 
   String? getCustomArtwork(int songId) {
     if (_artworkCache.containsKey(songId)) {
-      return _artworkCache[songId];
+      final path = _artworkCache[songId];
+      // If path is empty string, it means we checked and found nothing.
+      // Return null so UI falls back to QueryArtworkWidget (embedded art).
+      if (path == null || path.isEmpty) return null;
+      return path;
     }
-    return _defaultArtworkPath;
+    // Return null initially so UI falls back to QueryArtworkWidget or triggers download
+    return null;
   }
 
   // ================= MANUAL ARTWORK SEARCH =================
@@ -520,12 +543,19 @@ class MusicProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      List<SongModel> queriedSongs = await _audioQuery.querySongs(
-        ignoreCase: true,
-        orderType: OrderType.ASC_OR_SMALLER,
-        sortType: SongSortType.TITLE,
-        uriType: UriType.EXTERNAL,
-      );
+      List<SongModel> queriedSongs = [];
+
+      // Check permissions explicitly
+      if (await Permission.storage.isGranted || await Permission.audio.isGranted) {
+        queriedSongs = await _audioQuery.querySongs(
+          ignoreCase: true,
+          orderType: OrderType.ASC_OR_SMALLER,
+          sortType: SongSortType.TITLE,
+          uriType: UriType.EXTERNAL,
+        );
+      } else {
+        debugPrint("❌ Missing permissions - skipping song query");
+      }
 
       _songs = queriedSongs.map((s) {
         return SongData.fromFile(
@@ -533,6 +563,8 @@ class MusicProvider extends ChangeNotifier {
           filePath: s.data,
           duration: s.duration,
           album: s.album,
+          title: s.title,
+          artist: s.artist,
         );
       }).toList();
 
@@ -563,12 +595,13 @@ class MusicProvider extends ChangeNotifier {
       return;
     }
 
+    // Process songs that are NOT in the cache at all (meaning we haven't checked them)
     final songsNeedingArt = _allSongs.where((song) => 
-      getCustomArtwork(song.id) == null
+      !_artworkCache.containsKey(song.id)
     ).toList();
 
     if (songsNeedingArt.isEmpty) {
-      debugPrint('✅ All songs have artwork');
+      debugPrint('✅ All songs have cached artwork (either found or not found)');
       return;
     }
 
@@ -584,15 +617,43 @@ class MusicProvider extends ChangeNotifier {
         if (results.isNotEmpty) {
           await applyChosenArtwork(song.id, results.first);
           successCount++;
+        } else {
+          // Cache 'not found' state using EMPTY STRING to prevent infinite retries.
+          // This way getCustomArtwork knows to return null (fallback to embedded),
+          // but we won't re-run this loop.
+          _artworkCache[song.id] = "";
+          await _metadataBox.put(
+            song.id,
+            CachedMetadata(songId: song.id, localImagePath: ""),
+          );
         }
         
         await Future.delayed(const Duration(milliseconds: 500));
       } catch (e) {
         debugPrint('Failed to download artwork: $e');
+        // Do not cache failure on error, so we retry next time.
       }
     }
 
+
     debugPrint('✅ Auto-downloaded $successCount/${songsNeedingArt.length} artworks');
+  }
+
+  Future<void> clearMetadataCache() async {
+    try {
+      if (_isHiveReady) {
+        await _metadataBox.clear();
+        _artworkCache.clear();
+        debugPrint("🗑️ Metadata cache cleared");
+        notifyListeners();
+        
+        // Re-trigger download
+        autoDownloadArtwork();
+      }
+    } catch (e) {
+      debugPrint("Error clearing metadata cache: $e");
+      rethrow;
+    }
   }
 
   Future<void> toggleLike(SongData song) async {
@@ -1164,9 +1225,5 @@ class MusicProvider extends ChangeNotifier {
     });
   }
 
-  @override
-  void dispose() {
-    _fallbackPlayer.dispose();
-    super.dispose();
-  }
+
 }

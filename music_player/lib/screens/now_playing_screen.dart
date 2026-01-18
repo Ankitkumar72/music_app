@@ -604,6 +604,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
               songId: currentSong.id,
               isPlaying: musicProvider.isPlaying,
               customArtworkPath: musicProvider.getCustomArtwork(currentSong.id),
+              defaultArtworkPath: musicProvider.defaultArtworkPath,
             ),
 
             const Spacer(),

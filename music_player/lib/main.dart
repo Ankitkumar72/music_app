@@ -11,24 +11,25 @@ import 'logic/Models/song_data.dart';
 // AudioPlayerHandler? audioHandler;
 
 
-Future<void> requestNotificationPermission() async {
-  
+Future<void> requestPermissions() async {
+  // Request Notification Permission
   if (await Permission.notification.isDenied) {
-    debugPrint("📢 Requesting notification permission...");
-    
-    
-    final status = await Permission.notification.request();
-    
-    if (status.isGranted) {
-      debugPrint("✅ Notification permission granted");
-    } else if (status.isDenied) {
-      debugPrint("❌ Notification permission denied");
-    } else if (status.isPermanentlyDenied) {
-      debugPrint("⚠️ Notification permission permanently denied");
-      
+    await Permission.notification.request();
+  }
+
+  // Request Storage/Audio Permission based on Android version
+  if (await Permission.audio.status.isDenied) {
+    // Android 13+
+    await Permission.audio.request();
+  }
+  
+  if (await Permission.storage.status.isDenied) {
+    // Android < 13
+    await Permission.storage.request();
+    // Also manage external storage if needed for Android 11+ (Scoped Storage)
+    if (await Permission.manageExternalStorage.status.isDenied) {
+      // customized checking often needed here, but standard storage request usually sufficient for media in public dirs
     }
-  } else if (await Permission.notification.isGranted) {
-    debugPrint("✅ Notification permission already granted");
   }
 }
 
@@ -48,7 +49,7 @@ void main() async {
   await Hive.openBox('stats');
 
 
-  await requestNotificationPermission();
+  await requestPermissions();
 
 
   // AudioService initialization removed

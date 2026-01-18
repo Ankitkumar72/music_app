@@ -839,13 +839,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
 
       try {
-        // Clear metadata cache
-        final metadataBox = Hive.box('metadata');
-        await metadataBox.clear();
+        // Clear metadata cache via provider to ensure memory state is also updated
+        await context.read<MusicProvider>().clearMetadataCache();
 
         if (context.mounted) {
           Navigator.pop(context);
-          _showSnackBar("Metadata cache cleared. Artwork will be re-fetched.");
+          _showSnackBar("Metadata cache cleared. Re-downloading artwork...");
         }
       } catch (e) {
         if (context.mounted) {
