@@ -4,18 +4,7 @@ import 'package:just_audio/just_audio.dart';
 import '../Models/song_data.dart';
 import '../audio_handler.dart';
 
-/// 🎧 AudioEngineController (Playback Brain)
-///
-/// Purpose:
-/// 🔹 Decides WHAT to play
-/// 🔹 Builds queues
-/// 🔹 Handles skip logic
-/// 🔹 Manages Fallback Player vs AudioHandler
-///
-/// Rules:
-/// ✅ Creates queue MediaItems (initial only)
-/// ❌ Never updates notification
-/// ❌ Never updates artwork later
+
 class AudioEngineController {
   final AudioPlayerHandler? _handler;
   
@@ -103,11 +92,6 @@ class AudioEngineController {
 
   // ================= QUEUE MANAGEMENT =================
 
-  /// Builds the queue and starts playback.
-  /// 
-  /// ⚠️ IMPORTANT: This method creates the INITIAL MediaItems.
-  /// It intentionally does NOT set artwork to avoid blocking the UI.
-  /// MetadataController will pick up the playing item and fill in details.
   Future<void> playPlaylist(List<SongData> sourceList, int index) async {
     if (sourceList.isEmpty || index < 0 || index >= sourceList.length) return;
 

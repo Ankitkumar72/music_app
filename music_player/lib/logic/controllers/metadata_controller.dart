@@ -8,17 +8,7 @@ import 'package:just_audio/just_audio.dart';
 import '../Models/song_data.dart';
 import '../audio_handler.dart';
 
-/// 🧠 MetadataController (The Brain of Metadata)
-/// 
-/// Purpose:
-/// 🔹 Owns current song metadata
-/// 🔹 Owns artwork resolution
-/// 🔹 Owns notification updates
-/// 
-/// Rules:
-/// ✅ Only class allowed to call audioHandler.updateMediaItem(...)
-/// ✅ Atomic updates (title + artist + artwork together)
-/// ❌ Never reacts to playbackState directly
+
 class MetadataController {
   final AudioPlayerHandler? _handler;
   final AudioPlayer _player;
@@ -37,9 +27,7 @@ class MetadataController {
       final file = File('${dir.path}/transparent_1x1.png');
       
       if (!await file.exists()) {
-        // Base64 for 300x300 transparent PNG
-        // 1x1 is often ignored by Android MediaStyle, causing the old artwork to stick.
-        // We use a larger dimension to ensure it replaces the buffer.
+       
         final bytes = base64Decode(
           'iVBORw0KGgoAAAANSUhEUgAAASwAAAEsCAYAAAB5fY51AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAALEgAACxIB0t1+/AAAABZ0RVh0Q3JlYXRpb24gVGltZQAwMS8xNS8yNlDv4QkAAAAcdEVYdFNvZnR3YXJlAEFkb2JlIEZpcmV3b3JrcyBDUzQGstOgAAAAB3RJTUUH6gEPDRQA8xYqJAAAABR0RVh0Q29tbWVudABDb3B5cmlnaHQgMjAyNqWqVOcAAAA5SURBVGje7cExAQAAAMKg9U9tDQ+gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAOs54AAX+DeEAAAAAASUVORK5CYII='
         );
@@ -47,24 +35,21 @@ class MetadataController {
       }
       
       _transparentArtworkPath = file.path;
-      // Use Unique Cache Buster to force reload (even if file is same)
-      // Note: File URIs don't support query params well in all Android versions, 
-      // but the size change itself should trigger a refresh now.
+      
       debugPrint("✅ [MetadataCtrl] Transparent 300x300 placeholder ready");
     } catch (e) {
       debugPrint("❌ [MetadataCtrl] Failed to create transparent image: $e");
     }
   }
 
-  /// 🔒 Main Entry Point: Update metadata for a specific song
-  /// This is the "Single Source of Truth" update.
+  
   void updateForSong(SongData song, {String? artworkPath}) {
     _scheduleUpdate(() {
       _performUpdate(song, artworkPath);
     });
   }
 
-  /// Debounce the update to prevent notification spam
+  
   void _scheduleUpdate(VoidCallback action) {
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 80), action);
