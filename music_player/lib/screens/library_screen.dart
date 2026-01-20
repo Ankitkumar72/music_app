@@ -9,6 +9,7 @@ import '../logic/music_provider.dart';
 import '../logic/Models/song_data.dart';
 import '../widgets/filter_tab.dart';
 import '../widgets/song_menu.dart';
+import '../widgets/unified_song_artwork.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -307,31 +308,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      leading: Container(
-        width: 50,
-        height: 50,
-        decoration: BoxDecoration(
-          color: Colors.white10,
-          borderRadius: BorderRadius.circular(8),
+      leading: UnifiedSongArtwork(
+          songId: song.id,
+          customArtworkPath: customPath,
+          defaultArtworkPath: provider.defaultArtworkPath,
+          size: 50,
         ),
-        child: customPath != null && File(customPath).existsSync()
-            ? ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.file(File(customPath), fit: BoxFit.cover),
-              )
-            : QueryArtworkWidget(
-                id: song.id,
-                type: ArtworkType.AUDIO,
-                nullArtworkWidget: provider.defaultArtworkPath != null &&
-                        File(provider.defaultArtworkPath!).existsSync()
-                    ? Image.file(File(provider.defaultArtworkPath!),
-                        fit: BoxFit.cover)
-                    : const Icon(
-                        Icons.music_note,
-                        color: Colors.white54,
-                      ),
-              ),
-      ),
       title: Text(
         song.title,
         style: const TextStyle(
@@ -539,31 +521,29 @@ class _LibraryScreenState extends State<LibraryScreen> {
               child: ClipRRect(
                 borderRadius:
                     isCircular ? BorderRadius.circular(50) : BorderRadius.circular(12),
-                child: song != null
-                    ? (customPath != null && File(customPath).existsSync()
-                        ? Image.file(File(customPath), fit: BoxFit.cover)
-                        : QueryArtworkWidget(
-                            id: song.id,
-                            type: ArtworkType.AUDIO,
-                            nullArtworkWidget: provider.defaultArtworkPath != null &&
-                                    File(provider.defaultArtworkPath!).existsSync()
-                                ? Image.file(File(provider.defaultArtworkPath!),
-                                    fit: BoxFit.cover)
-                                : Icon(
-                                    isCircular ? Icons.person : Icons.album,
-                                    color: Colors.white54,
-                                    size: 40,
-                                  ),
-                          ))
-                    : (provider.defaultArtworkPath != null &&
-                            File(provider.defaultArtworkPath!).existsSync()
-                        ? Image.file(File(provider.defaultArtworkPath!),
-                            fit: BoxFit.cover)
-                        : Icon(
-                            isCircular ? Icons.person : Icons.album,
-                            color: Colors.white54,
-                            size: 40,
-                          )),
+              child: song != null
+                  ? UnifiedSongArtwork(
+                      songId: song.id,
+                      customArtworkPath: customPath,
+                      defaultArtworkPath: provider.defaultArtworkPath,
+                      size: 100,
+                      isCircular: isCircular,
+                      borderRadius: 12, // Ignored if isCircular is true
+                    )
+                  : (provider.defaultArtworkPath != null &&
+                          File(provider.defaultArtworkPath!).existsSync()
+                      ? ClipRRect(
+                          borderRadius: isCircular
+                              ? BorderRadius.circular(50)
+                              : BorderRadius.circular(12),
+                          child: Image.file(File(provider.defaultArtworkPath!),
+                              fit: BoxFit.cover),
+                        )
+                      : Icon(
+                          isCircular ? Icons.person : Icons.album,
+                          color: Colors.white54,
+                          size: 40,
+                        )),
               ),
             ),
             const SizedBox(height: 12),
@@ -709,26 +689,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
                       return ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: Container(
-                          width: 50,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            color: Colors.white10,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: customPath != null && File(customPath).existsSync()
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.file(File(customPath), fit: BoxFit.cover),
-                                )
-                              : QueryArtworkWidget(
-                                  id: song.id,
-                                  type: ArtworkType.AUDIO,
-                                  nullArtworkWidget: const Icon(
-                                    Icons.music_note,
-                                    color: Colors.white54,
-                                  ),
-                                ),
+                        leading: UnifiedSongArtwork(
+                          songId: song.id,
+                          customArtworkPath: customPath,
+                          defaultArtworkPath: provider.defaultArtworkPath,
+                          size: 50,
                         ),
                         title: Text(
                           song.title,

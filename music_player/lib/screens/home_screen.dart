@@ -9,6 +9,7 @@ import '../logic/music_provider.dart';
 import '../widgets/mini_player.dart';
 import '../widgets/song_menu.dart';
 import '../widgets/blob_background.dart';
+import '../widgets/unified_song_artwork.dart';
 
 // Helper function to get time-based greeting
 String _getGreeting() {
@@ -372,27 +373,12 @@ class HomeScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: Container(
-              color: Colors.white12,
-              height: 140,
-              width: 140,
-              child: customPath != null && File(customPath).existsSync()
-                  ? Image.file(
-                      File(customPath),
-                      fit: BoxFit.cover,
-                    )
-                  : QueryArtworkWidget(
-                      id: songId,
-                      type: ArtworkType.AUDIO,
-                      nullArtworkWidget: const Icon(
-                        Icons.music_note,
-                        color: Colors.white24,
-                        size: 50,
-                      ),
-                    ),
-            ),
+          UnifiedSongArtwork(
+            songId: songId,
+            customArtworkPath: customPath,
+            defaultArtworkPath: provider.defaultArtworkPath,
+            size: 140,
+            borderRadius: 20,
           ),
           const SizedBox(height: 8),
           Text(
@@ -452,26 +438,11 @@ class MixDetailScreen extends StatelessWidget {
                   final provider = context.read<MusicProvider>();
                   final String? customPath = provider.getCustomArtwork(song.id);
                     return ListTile(
-                      leading: Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: Colors.white10,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: customPath != null && File(customPath).existsSync()
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.file(File(customPath), fit: BoxFit.cover),
-                              )
-                            : QueryArtworkWidget(
-                                id: song.id,
-                                type: ArtworkType.AUDIO,
-                                nullArtworkWidget: const Icon(
-                                  Icons.music_note,
-                                  color: Colors.white24,
-                                ),
-                              ),
+                      leading: UnifiedSongArtwork(
+                        songId: song.id,
+                        customArtworkPath: customPath,
+                        defaultArtworkPath: provider.defaultArtworkPath,
+                        size: 50,
                       ),
                       title: Text(
                         song.title,

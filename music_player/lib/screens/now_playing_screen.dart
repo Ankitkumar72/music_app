@@ -220,11 +220,11 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
                 
                 // Play Next section
                 if (playNextQueue.isNotEmpty) ...[
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Text(
-                      "PLAYING NEXT",
-                      style: TextStyle(
+                      "PLAYING NEXT (${playNextQueue.length})",
+                      style: const TextStyle(
                         color: Colors.greenAccent,
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
@@ -262,22 +262,30 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
                   ...fullQueue.where((s) => 
                       !playNextQueue.any((p) => p.id == s.id) && 
                       !addedToQueue.any((a) => a.id == s.id))
-                    .map((song) => _buildQueueTile(
+                    .toList()
+                    .asMap()
+                    .entries
+                    .map((entry) {
+                      final index = entry.key;
+                      final song = entry.value;
+                      return _buildQueueTile(
                       song,
+                      index: index + 1, // 1-based index
                       onTap: () {
                         provider.playFromQueue(song);
                         Navigator.pop(context);
                       },
-                    )),
+                    );
+                    }),
                 ],
                 
                 // Added to Queue section
                 if (addedToQueue.isNotEmpty) ...[
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Text(
-                      "ADDED TO QUEUE",
-                      style: TextStyle(
+                      "ADDED TO QUEUE (${addedToQueue.length})",
+                      style: const TextStyle(
                         color: Colors.purpleAccent,
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
@@ -310,11 +318,21 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
     IconData? icon, 
     Color? iconColor,
     VoidCallback? onTap,
+    int? index,
   }) {
     return ListTile(
       leading: icon != null 
           ? Icon(icon, color: iconColor ?? Colors.white54, size: 20)
-          : null,
+          : (index != null 
+              ? SizedBox(
+                  width: 35, 
+                  child: Text(
+                    "$index", 
+                    style: const TextStyle(color: Colors.white54, fontSize: 13, fontWeight: FontWeight.w500),
+                    textAlign: TextAlign.center,
+                  )
+                )
+              : null),
       title: Text(
         song.title,
         maxLines: 1,

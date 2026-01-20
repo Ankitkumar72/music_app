@@ -220,9 +220,24 @@ class MusicProvider extends ChangeNotifier with WidgetsBindingObserver {
   
   /// Returns the full queue: remaining context songs + queued songs
   List<SongData> get fullQueue {
-    final remaining = _currentIndex >= 0 && _currentIndex < _currentPlaylist.length
-        ? _currentPlaylist.sublist(_currentIndex + 1)
-        : <SongData>[];
+    List<SongData> remaining = [];
+    
+    if (_isShuffleModeEnabled && _audioPlayer.effectiveIndices != null) {
+        final indices = _audioPlayer.effectiveIndices!;
+        final currentPos = indices.indexOf(_currentIndex);
+        if (currentPos != -1 && currentPos < indices.length - 1) {
+             final futureIndices = indices.sublist(currentPos + 1);
+             remaining = futureIndices
+                 .map((i) => i < _currentPlaylist.length ? _currentPlaylist[i] : null)
+                 .whereType<SongData>()
+                 .toList();
+        }
+    } else {
+        remaining = _currentIndex >= 0 && _currentIndex < _currentPlaylist.length
+            ? _currentPlaylist.sublist(_currentIndex + 1)
+            : <SongData>[];
+    }
+    
     return [..._playNextQueue, ...remaining, ..._addedToQueue];
   }
   

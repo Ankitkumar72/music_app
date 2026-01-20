@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../logic/Models/song_data.dart'; 
+import '../logic/music_provider.dart';
 import 'song_menu.dart';
+import 'unified_song_artwork.dart';
 
 class SongTile extends StatelessWidget {
   final SongData song;
@@ -14,25 +17,23 @@ class SongTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Watch provider to get updates on artwork
+    final provider = context.watch<MusicProvider>();
+
     return ListTile(
       onTap: onTap,
       onLongPress: () => showSongMenu(context, song),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       
-      // 1. Leading: Album Art with Rounded Corners
-      leading: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          width: 50,
-          height: 50,
-          color: Colors.grey[800], // Background color while loading
-          child: song.albumArtUrl != null 
-            ? Image.network(song.albumArtUrl!, fit: BoxFit.cover)
-            : const Icon(Icons.music_note, color: Colors.white70),
-        ),
+      // Leading: Unified Album Art
+      leading: UnifiedSongArtwork(
+        songId: song.id,
+        customArtworkPath: provider.getCustomArtwork(song.id),
+        defaultArtworkPath: provider.defaultArtworkPath,
+        size: 50,
       ),
 
-      // 2. Title: Bold and handles long names with ellipsis
+      // Title: Bold and handles long names with ellipsis
       title: Text(
         song.title,
         style: const TextStyle(
@@ -44,7 +45,7 @@ class SongTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
       ),
 
-      // 3. Subtitle: Artist Name (smaller and greyed out)
+      // Subtitle: Artist Name (smaller and greyed out)
       subtitle: Text(
         song.artist,
         style: TextStyle(
@@ -55,7 +56,7 @@ class SongTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
       ),
 
-      // 4. Trailing: Options Menu
+      // Trailing: Options Menu
       trailing: IconButton(
         icon: const Icon(Icons.more_vert, color: Colors.grey),
         onPressed: () => showSongMenu(context, song),
