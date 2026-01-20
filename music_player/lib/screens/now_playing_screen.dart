@@ -250,7 +250,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Text(
-                      "UP NEXT",
+                      "TRACKS",
                       style: TextStyle(
                         color: Colors.white54,
                         fontSize: 12,
@@ -268,9 +268,12 @@ class _NowPlayingScreenState extends State<NowPlayingScreen>
                     .map((entry) {
                       final index = entry.key;
                       final song = entry.value;
+                      final isCurrentSong = provider.currentSong?.id == song.id;
+                      
                       return _buildQueueTile(
                       song,
                       index: index + 1, // 1-based index
+                      isPlaying: isCurrentSong, // Highlight if it's the current song
                       onTap: () {
                         provider.playFromQueue(song);
                         Navigator.pop(context);

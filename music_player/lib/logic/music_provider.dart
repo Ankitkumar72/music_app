@@ -218,27 +218,23 @@ class MusicProvider extends ChangeNotifier with WidgetsBindingObserver {
   List<SongData> get addedToQueue => List.unmodifiable(_addedToQueue);
   List<SongData> get contextSongs => List.unmodifiable(_contextSongs);
   
-  /// Returns the full queue: remaining context songs + queued songs
+  /// Returns the full queue: all context songs in order + queued songs
   List<SongData> get fullQueue {
-    List<SongData> remaining = [];
+    List<SongData> contextOrdered = [];
     
     if (_isShuffleModeEnabled && _audioPlayer.effectiveIndices != null) {
         final indices = _audioPlayer.effectiveIndices!;
-        final currentPos = indices.indexOf(_currentIndex);
-        if (currentPos != -1 && currentPos < indices.length - 1) {
-             final futureIndices = indices.sublist(currentPos + 1);
-             remaining = futureIndices
-                 .map((i) => i < _currentPlaylist.length ? _currentPlaylist[i] : null)
-                 .whereType<SongData>()
-                 .toList();
-        }
+        // Map ALL indices to return the full shuffled deck
+        contextOrdered = indices
+             .map((i) => i < _currentPlaylist.length ? _currentPlaylist[i] : null)
+             .whereType<SongData>()
+             .toList();
     } else {
-        remaining = _currentIndex >= 0 && _currentIndex < _currentPlaylist.length
-            ? _currentPlaylist.sublist(_currentIndex + 1)
-            : <SongData>[];
+        // Return full playlist as is
+        contextOrdered = List.from(_currentPlaylist);
     }
     
-    return [..._playNextQueue, ...remaining, ..._addedToQueue];
+    return [..._playNextQueue, ...contextOrdered, ..._addedToQueue];
   }
   
   // Library search results
