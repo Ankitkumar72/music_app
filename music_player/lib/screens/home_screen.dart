@@ -10,6 +10,7 @@ import '../widgets/mini_player.dart';
 import '../widgets/song_menu.dart';
 import '../widgets/blob_background.dart';
 import '../widgets/unified_song_artwork.dart';
+import '../widgets/slideshow_card.dart';
 
 // Helper function to get time-based greeting
 String _getGreeting() {
@@ -115,6 +116,7 @@ class HomeScreen extends StatelessWidget {
                             .join(", "),
                     const Color(0xFF5D4037),
                     musicProvider.dailyMixSongs,
+                    musicProvider.dailyMixImages,
                   ),
                   _buildLargeDailyMixCard(
                     context,
@@ -122,6 +124,7 @@ class HomeScreen extends StatelessWidget {
                     "New music picked just for you",
                     const Color(0xFF455A64),
                     musicProvider.discoverySongs,
+                    musicProvider.discoveryImages,
                   ),
                 ],
               ),
@@ -277,14 +280,12 @@ class HomeScreen extends StatelessWidget {
     String subtitle,
     Color color,
     List<SongData> songList,
+    List<String> imagePaths,
   ) {
-    // Different seed for each card to create unique blob patterns
-    final seed = title == "Daily Mix 1" ? 42 : 123;
-    final secondaryColor = title == "Daily Mix 1" 
-        ? const Color(0xFF8D6E63) // Warm brown for Daily Mix
-        : const Color(0xFF607D8B); // Cool blue-grey for Discovery
-
-    return GestureDetector(
+    return SlideshowCard(
+      title: title,
+      subtitle: subtitle,
+      imagePaths: imagePaths,
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
@@ -292,70 +293,16 @@ class HomeScreen extends StatelessWidget {
               MixDetailScreen(title: title, songs: songList, themeColor: color),
         ),
       ),
-      child: Container(
-        width: 260,
-        margin: const EdgeInsets.only(right: 16),
-        child: BlobBackground(
-          primaryColor: color,
-          secondaryColor: secondaryColor,
-          seed: seed,
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFD700),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFFFD700).withOpacity(0.4),
-                        blurRadius: 15,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(Icons.play_arrow, color: Colors.black, size: 28),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    shadows: [
-                      Shadow(
-                        blurRadius: 10,
-                        color: Colors.black38,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    shadows: [
-                      Shadow(
-                        blurRadius: 8,
-                        color: Colors.black26,
-                      ),
-                    ],
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+      onPlay: () {
+        // Find if we have songs to play
+        if (songList.isNotEmpty) {
+          context.read<MusicProvider>().playSong(
+                0,
+                customList: songList,
+                contextName: title,
+              );
+        }
+      },
     );
   }
 

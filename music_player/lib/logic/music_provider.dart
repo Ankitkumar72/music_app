@@ -24,6 +24,12 @@ class MusicProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const platform = MethodChannel('com.example.music_player/notification');
   final OnAudioQuery _audioQuery = OnAudioQuery();
 
+  List<String> _dailyMixImages = [];
+  List<String> _discoveryImages = [];
+
+  List<String> get dailyMixImages => _dailyMixImages;
+  List<String> get discoveryImages => _discoveryImages;
+
   AudioPlayer get _audioPlayer => _fallbackPlayer;
   
   // Fallback player for when audio_service isn't initialized
@@ -39,6 +45,7 @@ class MusicProvider extends ChangeNotifier with WidgetsBindingObserver {
     _setupMediaButtonHandler();
     _initSession();
     _prepareDefaultArt();
+    _loadHomeGraphics();
     _initHive();
   }
 
@@ -116,6 +123,64 @@ class MusicProvider extends ChangeNotifier with WidgetsBindingObserver {
     } catch (e) {
       debugPrint('❌ Error preparing default artwork: $e');
     }
+  }
+
+  Future<void> _loadHomeGraphics() async {
+    List<String> imagePaths = [];
+    
+    // Define fallback images locally to ensure they are available even on error
+    final fallbackFiles = [
+      "boy-5977962_1280.png",
+      "cassette-4103530_640.jpg",
+      "cassette-7859000_1280.jpg",
+      "cat-6887210_640.png",
+      "cat-7347316_640.png",
+      "fairy-tale-1180921_640.png",
+      "gaspifilms-x3RQxQk03M4-unsplash.jpg",
+      "girl playing.jpg",
+      "music-7258284_640.jpg",
+      "tobias-rademacher-XQrRSqSdyzE-unsplash.jpg"
+    ];
+
+    try {
+      final manifestContent = await rootBundle.loadString('AssetManifest.json');
+      final Map<String, dynamic> manifestMap = json.decode(manifestContent);
+      
+      imagePaths = manifestMap.keys
+          .where((String key) => key.contains('assets/images/home_images/'))
+          .where((String key) => key.toLowerCase().endsWith('.jpg') || key.toLowerCase().endsWith('.png') || key.toLowerCase().endsWith('.jpeg'))
+          .toList();
+      
+      imagePaths.sort(); // Ensure consistent order
+      
+      debugPrint("📂 Manifest Loaded. Found ${imagePaths.length} home images.");
+    } catch (e) {
+      debugPrint("❌ Error loading AssetManifest (likely missing on this version): $e");
+      debugPrint("⚠️ Using fallback image list.");
+      // On error, populate with fallback files
+      imagePaths = fallbackFiles.map((f) => "assets/images/home_images/$f").toList();
+    }
+
+    // Also use fallback if manifest worked but returned no matching images
+    if (imagePaths.isEmpty) {
+       debugPrint("⚠️ Manifest loaded but empty. Using fallback image list.");
+       imagePaths = fallbackFiles.map((f) => "assets/images/home_images/$f").toList();
+    }
+
+    // Split 50/50
+    if (imagePaths.isNotEmpty) {
+      final half = (imagePaths.length / 2).ceil();
+      _dailyMixImages = imagePaths.take(half).toList();
+      _discoveryImages = imagePaths.skip(half).toList();
+      
+      // Fallback if discovery is empty
+      if (_discoveryImages.isEmpty && _dailyMixImages.isNotEmpty) {
+        _discoveryImages = List.from(_dailyMixImages);
+      }
+    }
+    
+    notifyListeners();
+    debugPrint("🖼️ Final images: Mix=${_dailyMixImages.length}, Discovery=${_discoveryImages.length}");
   }
 
   // ================= SONG LISTS =================
@@ -700,6 +765,9 @@ class MusicProvider extends ChangeNotifier with WidgetsBindingObserver {
     _isLoading = false;
     notifyListeners();
     
+    notifyListeners();
+    
+    _loadHomeGraphics();
     autoDownloadArtwork();
   }
 
